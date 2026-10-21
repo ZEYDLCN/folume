@@ -10,7 +10,7 @@ Otomatik sonuçlar yalnızca "ayrıştırıcı ve uygulama, bilinen doğru yapı
 
 | README ölçütü | Otomatik vekil (depoda) | Durum | Kullanıcı/gerçek veri gerektiren kısım |
 |---|---|---|---|
-| **Dönüşüm bütünlüğü** | Metin geri çağırma/kesinlik, tür bulma, tablo hücre doğruluğu, atıf bağlama, **metin defteri** (her karakterin hesabı) — `backend/evals`, `tests/test_parsing.py` | Sentetik, LibreOffice ve Chromium PDF'lerinde ≥ %97 | Gerçek makalelerde (özellikle karmaşık formül, çok sütun, taranmış PDF) oran. **Ölçülmedi.** |
+| **Dönüşüm bütünlüğü** | Metin geri çağırma/kesinlik, tür bulma, tablo hücre doğruluğu, atıf bağlama, **metin defteri** ve **harf harf eksiksizlik denetimi** (bkz. §2.5) — `backend/evals`, `tests/test_parsing.py`, `tests/test_completeness.py` | Sentetik, LibreOffice ve Chromium PDF'lerinde ≥ %97; harf denetiminde 0 eksik / 0 fazla | Gerçek makalelerde (özellikle karmaşık formül, çok sütun, taranmış PDF) oran. **Ölçülmedi.** |
 | **Kaynağa dönüş doğruluğu** | Her bloğun `(sayfa, bbox)` kaynağının gerçek konumla örtüşmesi (IoU / içerme); Original↔Book e2e testi | Sentetikte ortalama ≈ 0,99; e2e'de geçiş ve vurgulama doğrulandı | Gerçek makalelerde örtüşme; kullanıcıların "doğru yere gitti" algısı |
 | **Okuma verimliliği** | — (vekil yok: ekran başına kaydırma/yakınlaştırma ölçülemez) | Ölçülmedi | Mobil cihazda yakınlaştırma ve yatay kaydırma sayımı, karşılaştırmalı okuma süresi |
 | **Anlama kazanımı** | — Kavrama soruları ve tekrar kartları **üretilir ve kaydedilir**; kazanım ölçülmez | Ölçülmedi | Okuma sonrası test, kontrol grubu (mevcut PDF okuyucu) |
@@ -61,11 +61,28 @@ Bu üreticiler sentetik külliyatın yakalamadığı **gerçek hataları** ortay
 | Backend | `make test-backend` | Model, ayrıştırma, API, iş izolasyonu (zaman aşımı/bellek/büyük sayfa), AI geçidi (sahte LLM), senkron |
 | Mobil birim | `make test-mobile` | Belge modeli + şema sözleşmesi (ajv), kütüphane/not/kart depoları, import, BM25, kavram çıkarımı, bağlantılar, arama, SM-2, atıf/yedek dışa aktarma, kayıt birleştirme, senkron motoru |
 | Okuyucu runtime | `e2e/reader-runtime.mjs` | Gerçek Chromium: tüm blok türleri, atıflar, Original↔Book, seçim/vurgu, tema |
+| Okuma biçimleri | `e2e/formats.mjs` | Kitap/Dergi/sayfa sayfa: aynı metin, konum korunumu, seçim; 90 sayfalık makale için hız bütçesi |
+| Dönüştürme | `e2e/export-flow.mjs` | Uygulamadan gerçek indirmeler; pandoc/tarayıcı/ZIP doğrulaması (`e2e/verify_exports.py`) |
+| Linkle içe aktarma | `e2e/link-flow.mjs` | Yerel “yayıncı” sitesi: PDF, yönlendirme, açılış sayfası, hata iletileri, iç adres reddi |
 | Uygulama akışı | `e2e/app-flow.mjs` | Gerçek API + web derlemesi: içe aktarma → okuma → ayarlar → silme |
 | Öğrenme katmanı | `e2e/learn-flow.mjs` | Sahte OpenAI uyumlu model **HTTP üzerinden**: AI kapalıyken hiçbir şey gitmez, önizleme, kaynaklı/kaynaksız ayrımı, not, kavrama testi |
 | Bilgi çalışma alanı | `e2e/knowledge-flow.mjs` | İki “cihaz” + gerçek API: arama, etiket, bağlantılar, AI karşılaştırma, tekrar, dışa aktarma, yedek, senkron, silme |
 
 Android ve iOS için `expo export` (Hermes paketleme) başarıyla derlenir; bu **cihazda çalıştırmak değildir**.
+
+### 2.5 Eksiksizlik ve biçim dönüştürme
+
+**Metin katmanı eksiksizliği** (`tests/test_completeness.py`): belgenin harf/rakam çok kümesi PDF metin katmanıyla karşılaştırılır; sonuç `quality.completeness`.
+Ayrıca pdfium (hiçbir kodu paylaşmayan bir motor) PDF'ten okunan harfleri verir; belgede eksik harf yoktur (yalnızca üst üste basılmış kopyalar sayılır).
+Sonuç: 5 sentetik + LibreOffice (3) + Chromium (3) PDF'inde **0 eksik, 0 fazla harf**. Denetimin kendisi sınanır: bir paragrafın yarısını silmek ya da metin eklemek raporlanır;
+bir satırı düşüren hat, karakterleri `text_recovered` bloğu olarak geri koyar.
+**Sınır:** bu, PDF'in *metin katmanı* içindir. Metni eğriye çevrilmiş ya da tarama PDF'lerinde harf yoktur; bunlar “eksiksiz” denmez. Gerçek makalelerde denenmedi.
+
+**Biçim dönüştürme** (`mobile/src/core/export/paper.test.ts`, `e2e/export-flow.mjs`): her biçim (EPUB, HTML, Markdown, TXT) × 3 fikstür × (çıkarılanlar bölümü açık/kapalı) × (resimli/resimsiz) için:
+XML ayrıştırıcıyla (HTML ve EPUB iyi biçimli olmalı), markdown-it ile (Markdown) okunan harf çok kümesi belgeyle aynıdır; fazlalık yalnızca bildirilen etiketlerdir.
+Tarayıcı senaryosu uygulamadan gerçek indirmeleri alır ve **pandoc** ile (EPUB/HTML/Markdown'ı kendi okuyucusuyla) geri okur: 8 dosyanın tamamında eksik harf yok; EPUB paketi (mimetype ilk ve sıkıştırmasız, manifest↔dosyalar, spine, XHTML iyi biçimliliği, görüntü imzaları) Python ile,
+her bölüm gerçek bir tarayıcıyla (`application/xhtml+xml`, `parsererror` yok) doğrulanır. Kötü niyetli/tuhaf metin (`<script>`, `]]>`, kontrol karakterleri, yalnız vekil çift, `javascript:` bağlantısı) iyi biçimli çıktı verir.
+**Sınır:** EPUB gerçek e-okuyucularda (Apple Books, Kindle, Kobo) ve epubcheck ile denenmedi.
 
 ### 2.4 Dayanıklılık
 
@@ -85,9 +102,12 @@ Sentetik IEEE makaleleri, 2 çekirdekli geliştirme konteyneri:
 | Kısa | 3 | 140 KB | 1,2 s | ≈ 1,1 MB |
 | Uzun | 6 | 420 KB | 3,1 s | ≈ 2,6 MB |
 
-Sayfa başına yaklaşık 0,4–0,5 s ve 0,4 MB; tepe bellek ≈ 200 MB (6 sayfa). 30 sayfalık bir makale için ~15 s ve ~12 MB beklenir
+(Bu tablo Faz 9'daki hızlandırmadan önce ölçüldü; aynı altı sentetik PDF'in (biri taranmış örnek) toplam dönüşüm süresi 5,8 s → 4,1 s'ye indi, çıktı bayt bayt aynı. Kalan süre çoğunlukla `pdfplumber` karakter çıkarımındadır.)
+
+Sayfa başına yaklaşık 0,3–0,45 s ve 0,4 MB; tepe bellek ≈ 200 MB (6 sayfa). 30 sayfalık bir makale için ~15 s ve ~12 MB beklenir
 (**ekstrapolasyon**, ölçülmedi). Her dönüşüm ayrı bir süreçte, varsayılan 300 s ve 4 GB sınırıyla çalışır.
-Okuyucu şekil/sayfa görüntülerini tembel yükler; cihaz üzerindeki kaydırma/bellek davranışı **ölçülmedi**.
+Okuyucu şekil/sayfa görüntülerini tembel yükler. 90 sayfalık (1.680 bloklu) bir makale masaüstü Chromium'da ≈ 0,25 s'de ilk konumu bildirir, sona atlama ≈ 0,1–0,15 s sürer
+(bütçe: 2,5 s / 1,5 s); makalede bul 1.700 blokta < 0,5 s. Cihaz WebView'ındaki gerçek süre ve bellek **ölçülmedi** (masaüstünden birkaç kat yavaş beklenir).
 
 ## 4. Ölçülmeyenler / bilinen sınırlar
 
@@ -97,7 +117,8 @@ Okuyucu şekil/sayfa görüntülerini tembel yükler; cihaz üzerindeki kaydırm
 - **Docling.** İndirme yapılamadığı için denenmedi; ayrıştırıcı arayüzü onu takmaya elverişlidir.
 - **Kavram çıkarımı.** Kurallı (kısaltma, tanım kalıpları, vurgulu terimler, anahtar sözcükler, sık geçen isim öbekleri). Sentetik makalelerde sağlıklı çalışıyor; gerçek makalelerde gürültü ve kaçırma beklenir. Arayüz bunu açıkça söyler ve her satırı kaynağa bağlar.
 - **Karmaşık düzenler.** Üç ve daha çok sütun, döndürülmüş sayfalar, taranmış PDF (OCR yok): “düzen belirsiz”/“desteklenmiyor” olarak işaretlenir; sessizce yanlış sonuç üretilmez.
-- **Sayfa sayfa okuma modu** uygulanmadı (yalnızca kaydırmalı Book View).
+- **Dergi stili ve sayfa sayfa okuma** yalnızca Chromium'da sınandı; cihaz WebView'ında (özellikle CSS sütunları ve `dvh` birimleri) davranış doğrulanmadı.
+- **Linkle içe aktarma** gerçek arXiv/yayıncı sitelerine karşı denenmedi (ağ kısıtlı): çözümleyici kuralları ve indirici, yerel bir test sitesi ve sahte DNS ile sınandı. Yayıncı sitelerinin bot korumaları ve giriş duvarları “indirilemedi” hatası verir.
 - **Senkron.** Sunucu kayıtları düz metin saklar; son yazan kazanır (aynı kaydı iki cihaz eşzamanlı düzenlerse eski kalan kaybolur). Kayıt başına son-yazan-kazanır olduğundan okuma durumunda eşzamanlı yer imleri birleştirilmez.
 
 ## 5. Gerçek PDF seti ile doğrulama protokolü (önerilen sonraki adım)

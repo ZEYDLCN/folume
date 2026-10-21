@@ -3,7 +3,8 @@
 ## Gereksinimler
 
 - Python ≥ 3.11 (3.13 ile geliştirildi), Node ≥ 20 (22 ile geliştirildi)
-- İsteğe bağlı: LibreOffice (`soffice`), Chromium ve `pandoc` → bağımsız PDF üreticili ek testler; yoksa bu testler atlanır
+- İsteğe bağlı: LibreOffice (`soffice`), Chromium ve `pandoc` → bağımsız PDF üreticili ek testler; yoksa bu testler atlanır.
+  CI makinelerinde üretici testleri varsayılan olarak çalışmaz (`FOLUME_PRODUCER_TESTS=1` ile açılır). `pandoc` ayrıca dışa aktarma doğrulamasında (`e2e/export-flow.mjs`) kullanılır
 - İsteğe bağlı: Playwright'ın Chromium'u (`/opt/pw-browsers/chromium` ya da `CHROMIUM_PATH`) → uçtan uca testler
 
 ## Kurulum
@@ -53,7 +54,12 @@ node reader-runtime.mjs    # okuyucu runtime'ı
 node app-flow.mjs          # içe aktarma → okuma → ayarlar
 node learn-flow.mjs        # AI kapalı/açık, önizleme, kaynak çipleri, not, kavrama testi
 node knowledge-flow.mjs    # arama, etiket, bağlantılar, tekrar, dışa aktarma, yedek, iki cihazlı senkron
+node formats.mjs           # Kitap / Dergi / sayfa sayfa; büyük makale hız bütçesi
+node link-flow.mjs         # arXiv/DOI/bağlantı ile içe aktarma (yerel test sitesi)
+node export-flow.mjs       # EPUB / HTML / Markdown / TXT indirmeleri; pandoc varsa geri okuma
 ```
+
+Hepsi için tek komut: `make e2e` (sentetik külliyatı üretir, paketleri dışa aktarır, web derlemesini yapar ve yedi betiği çalıştırır).
 
 Ekran görüntüleri `e2e/out/shots/` altına yazılır. Her betik kendi API'sini (ve gerekirse sahte LLM'ini) başlatıp kapatır.
 Sentetik külliyat ve ölçüm: `cd backend && .venv/bin/python -m evals.run`.
@@ -76,7 +82,8 @@ Okuyucu runtime'ını (`mobile/reader/src`) değiştirince `npm run build:reader
 backend/
   src/folume/
     model.py            belge modeli v1 (Pydantic)
-    parsing/            PDF → bloklar (raw, furniture, regions, layout, structure, tables, refs, quality, render, pipeline)
+    parsing/            PDF → bloklar (raw, furniture, regions, layout, structure, tables, refs, quality, audit, render, pipeline)
+    fetch.py            bağlantı çözümleyici ve güvenli indirici (SSRF korumalı)
     ai/                 LLM geçidi (istemler, atıf doğrulama, çevrimdışı yedek, sağlayıcılar)
     routes/             documents · ai · sync
     jobs.py             iş yöneticisi (süreç yalıtımı, zaman aşımı, TTL)
@@ -85,7 +92,8 @@ backend/
   evals/                ölçüm harness'ı
 mobile/
   src/app/              ekranlar (expo-router): kütüphane, okuyucu, rapor, notlar, quiz, arama, tekrar, bağlantılar, veri, ayarlar
-  src/core/             saf TypeScript: belge modeli, retrieval, kavramlar, bağlantılar, arama, SM-2, dışa aktarma, kayıt tipleri
+  src/core/             saf TypeScript: belge modeli, retrieval, kavramlar, bağlantılar, arama, SM-2, kayıt tipleri,
+                        completeness (harf sayımı), find (makalede bul), link, export/ (EPUB, HTML, Markdown, TXT, zip)
   src/data/             yerel depolar (KV, blob, kütüphane, notlar, kartlar, kayıt birleştirme, yedek)
   src/services/         API istemcisi, içe aktarma, bilgi servisi, senkron motoru
   reader/               WebView/iframe içinde çalışan okuyucu runtime'ı (esbuild ile tek HTML)
@@ -109,6 +117,9 @@ docs/                   ROADMAP · ARCHITECTURE · EVALUATION · DEVELOPMENT
 | `FOLUME_LLM_BASE_URL` / `FOLUME_LLM_MODEL` / `FOLUME_LLM_API_KEY` | — | OpenAI uyumlu sağlayıcı; yoksa AI uçları yalnızca “kaynak pasajları” yedeğiyle yanıt verir |
 | `FOLUME_LLM_VISION`, `FOLUME_LLM_TIMEOUT_SECONDS` | 0, 60 | Görsel girdiyi destekliyor mu, istek zaman aşımı |
 | `FOLUME_AI_RATE_LIMIT` | 40 | İstemci başına dakikada AI isteği |
+| `FOLUME_URL_IMPORT` | 1 | Bağlantıdan içe aktarma (`POST /v1/documents/from-url`) açık mı |
+| `FOLUME_ALLOW_PRIVATE_URLS` | 0 | 1 ise sunucu özel/yerel adreslerden de indirir (**yalnızca yerel test**; kapalıyken SSRF koruması vardır) |
+| `FOLUME_URL_TIMEOUT_SECONDS` | 60 | İndirme zaman aşımı |
 | `FOLUME_SYNC_ENABLED` / `FOLUME_SYNC_DB` | 0 / `var/sync.sqlite3` | İsteğe bağlı senkron ve SQLite dosyası |
 
 ## Dağıtım

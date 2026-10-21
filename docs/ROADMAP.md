@@ -12,6 +12,11 @@ Mimari kararlar için bkz. [ARCHITECTURE.md](ARCHITECTURE.md).
 | 2 — Learning Layer | ✅ uygulandı, sahte LLM ile doğrulandı | Gerçek model denemesi **yapılmadı** |
 | 3 — Knowledge Workspace | ✅ uygulandı, iki “cihaz” + gerçek API ile doğrulandı | Kurallı kavram çıkarımı gerçek makalelerde sınanmadı |
 | 4 — Sertleştirme | ✅ tamamlandı | Bağımsız PDF üreticileri, süreç yalıtımı, belgeler |
+| 5 — Eksiksizlik kanıtı | ✅ uygulandı, bağımsız PDF motoruyla doğrulandı | Gerçek makalelerde denenmedi |
+| 6 — Linkle içe aktarma | ✅ uygulandı, yerel test sitesiyle doğrulandı | Gerçek arXiv/yayıncı sitelerinde denenmedi |
+| 7 — Okuma biçimleri | ✅ uygulandı (Kitap, Dergi, sayfa sayfa, Orijinal), Chromium'da doğrulandı | Cihaz WebView'ında denenmedi |
+| 8 — Biçim dönüştürme | ✅ uygulandı (EPUB, HTML, Markdown, TXT), pandoc ve tarayıcıyla doğrulandı | EPUB gerçek e-okuyucularda denenmedi |
+| 9 — Kullanım rahatlığı ve hız | ✅ uygulandı (makalede bul, devam et, kalan süre, odak modu; dönüştürücü ≈ %30 hızlandı) | Cihazda ölçülmedi |
 
 Bilinçli olarak yapılmayanlar ve açık riskler: bu belgenin sonundaki “Kapsam dışı” ve [EVALUATION.md](EVALUATION.md) §4.
 
@@ -93,6 +98,25 @@ Her faz sonunda: testler yeşil, tip kontrolleri temiz, README onay kutuları ya
 - Android/iOS paketleme denemesi (derleniyor; cihazda çalıştırılmadı), kullanılamayan ağ nedeniyle gerçek makale denemesi yapılamadı.
 - `docs/EVALUATION.md`: başarı ölçütlerinin hangileri otomatik ölçülüyor, hangileri kullanıcı testi gerektiriyor.
 - README durumunun dürüst güncellenmesi, commit geçmişi taraması.
+
+### Faz 5 — Eksiksizlik kanıtı
+- `parsing/audit.py`: PDF metin katmanındaki harf ve rakamların (NFKC, büyük/küçük harf korunur) çok kümesi ile belgedeki (önek + metin + şekil/tablo içi metin + atlanan üst/alt bilgi) çok kümesi karşılaştırılır; fark `quality.completeness` olarak raporlanır, farkın yeri bloklara atfedilir.
+- Metin kaybolmaz: bloğa yerleşmeyen karakterler `text_recovered` bayraklı bloklara döner; şekil/tablo içindeki yazı `inner_text` olarak seçilebilir kalır; tablo hücreleri harf kaybederse resim + metin gösterilir.
+- Testler: motordan bağımsız doğrulama (pdfium), hasar tespiti (silinen metin raporlanır), 5 sentetik + 6 üretici PDF'i için sıfır eksik/fazla harf.
+
+### Faz 6 — Linkle içe aktarma
+- `POST /v1/documents/from-url`: arXiv numarası, DOI, OpenReview/ACL/bioRxiv bağlantıları ve genel PDF/açılış sayfası bağlantıları çözülür; sunucu indirir ve dönüştürür.
+- SSRF koruması: yalnızca herkese açık IP'ler, IP sabitleme (Host/SNI korunur), her yönlendirme yeniden doğrulanır, boyut/süre sınırı, adres yankılanmaz.
+
+### Faz 7 — Okuma biçimleri
+- Düzen: Kitap | Dergi (CSS); akış: kaydırma | sayfa sayfa (CSS sütunlarından oluşan ekran dizisi, JS ile çevirme/yerleşme/çapalama); Orijinal sayfa görüntüleri.
+
+### Faz 8 — Biçim dönüştürme
+- Cihazda üretilir (`mobile/src/core/export/paper*.ts`): EPUB 3 (bölümler, içindekiler, sayfa listesi, resimler), tek dosya HTML, Markdown (+ ZIP), düz metin. Her biçim PDF metninin her harfini taşır; testler dosyaları XML ayrıştırıcı, markdown-it ve pandoc ile okuyup harf çok kümesini belgeyle karşılaştırır.
+
+### Faz 9 — Kullanım rahatlığı ve hız
+- Makalede bul, “Okumaya devam et” kartı, kalan süre, odak modu, ilerlemenin sayfa/uygulama kapanırken kaydedilmesi.
+- Dönüştürücüde ikinci dereceden bir boyut hesabı kaldırıldı, parça metni bir kez hesaplanıyor (≈ %30, çıktı bayt bayt aynı). Hız bekçileri: dönüştürücü (`tests/test_performance.py`) ve 90 sayfalık makale için okuyucu bütçesi (`e2e/formats.mjs`).
 
 ## 3. Kapsam dışı (bilinçli)
 

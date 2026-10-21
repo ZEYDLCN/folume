@@ -53,9 +53,47 @@ PDF bytes
  → structure.py  başlık / paragraf / liste / dipnot / altyazı; sütun ve sayfa sürekliliği; tireleme
  → refs.py       kaynakça girdileri; metin içi atıfları girdilere bağlama
  → quality.py    blok güveni, bayraklar, sayfa düzeni güveni, metin defteri, genel not
+ → audit.py      eksiksizlik denetimi: PDF metin katmanı ile belge arasında harf/rakam çok kümesi karşılaştırması
  → render.py     sayfa görüntüleri + kırpıntılar
  → Document + assets
 ```
+
+## Eksiksizlik denetimi
+
+Karşılaştırma birimi, Unicode NFKC sonrası harf ve rakamdır (büyük/küçük harf korunur). Boşluk, satır sonu, tire ve noktalama düzen sayılır
+(tireleme onarımı bir tireyi kaldırabilir; “ﬁ” ligatürü ile “fi” aynı metindir). Çok kümesi karşılaştırması sıralama oyunlarıyla sağlanamaz.
+
+- **Referans:** görünür karakterler + görünmez (< 0,5 pt) + üst üste basılmış kopyalar (sahte kalın). Son ikisi belgeye girmez ama sayılır ve raporlanır.
+- **Çıktı tarafı:** `prefix + text + inner_text` (her blok) + atlanan üst/alt bilginin metni (`OmittedRegion.text`).
+- **Kayıp yok:** bloklara yerleşmeyen karakterler `text_recovered` bayraklı bloklara geri konur; denetim yine de eksik/fazla harf bulursa `quality.completeness.problems` farkı bloğa (kaynak bbox'larıyla) atfeder.
+- **Bağımsız doğrulama:** testlerde belgenin harfleri pdfium'un okuduğu harflerle karşılaştırılır; denetimin kendisi de bozulmuş belgeyle sınanır (silinen metin yakalanır).
+- Taranmış PDF'de (metin katmanı yok) `complete=false` döner; “tamamdır” denmez.
+
+## Bağlantıdan içe aktarma
+
+```text
+istemci → POST /v1/documents/from-url {url}  →  iş (job)  →  çözümleyici → indirici → (açılış sayfasıysa citation_pdf_url) → dönüştürücü
+```
+
+- `fetch.resolve_source`: arXiv (`abs/pdf/numara`), DOI (`10.x/...`, `doi:` öneki), OpenReview, ACL Anthology, bioRxiv/medRxiv ve düz bağlantılar PDF adaylarına çevrilir.
+- `Fetcher`: yalnızca `http(s)`; ad çözülür, **yalnızca herkese açık IP'lere** bağlanılır (özel, döngü, bağlantı-yerel, bulut meta veri adresleri reddedilir), bağlantı çözülen IP'ye sabitlenir (Host/SNI korunur),
+  her yönlendirme yeniden doğrulanır, boyut ve süre sınırı vardır, hata iletileri adresi yankılamaz. Yerel test için `FOLUME_ALLOW_PRIVATE_URLS=1`.
+- Sunucu yine hiçbir şey saklamaz: indirilen PDF bellekte dönüştürülür, sonuç istemci indirince silinir.
+
+## Okuma biçimleri (okuyucu runtime'ı)
+
+İki bağımsız eksen: **düzen** (`book` | `magazine`, CSS sınıfı) ve **akış** (`scroll` | `paged`). Sayfa sayfa akışta `#book` bir CSS sütun satırıdır (her ekran bir sütun),
+çevirme `scrollLeft` ile yapılır; konum bir blok çapasıyla taşınır, bu yüzden punto, düzen ve akış değişince kaldığın yer korunur. Orijinal görünüm sayfa görüntüleridir.
+Metin seçimi, vurgu ve bulma işaretleri DOM Range ile çalıştığından her biçimde aynıdır; blok metni her biçimde aynıdır (testle sabitlenmiştir).
+
+## Biçim dönüştürme (dışa aktarma)
+
+Cihazda, saf TypeScript'te (`mobile/src/core/export`): `paperShared` (okuma sırası, başlık→bölüm, altyazı bağlama, güvenli metin), `paperHtml` (XHTML üretimi; HTML ve EPUB aynı işaretlemeyi kullanır),
+`paperEpub` (EPUB 3: `mimetype` ilk ve sıkıştırmasız, `container.xml`, OPF, nav + sayfa listesi, bölüm başına XHTML, resimler), `paperMarkdown` (Markdown + düz metin), `zip` (CRC32'li saklamalı ZIP yazıcı/okuyucu).
+
+- Çıktı **eksiksizdir**: aynı harf çok kümesi; ürünün eklediği sözcükler (daralan şekil metni etiketi, “çıkarılanlar” başlığı) `chrome` olarak bildirilir ve testte fazlalığı tam açıklamalıdır.
+- Sayfa sınırları metin eklemeden işaretlenir (`doc-pagebreak`, EPUB sayfa listesi, Markdown yorumu). Denklemler resim + `alt` metni; şekil içi yazı `<details>` içinde.
+- Güvenlik: XML'de geçersiz karakterler atılır (harf değildir), tüm metin kaçışlanır, yalnızca `http(s)`/`mailto` bağlantıları yazılır, betik yoktur.
 
 ## Bilgi katmanı (istemci)
 

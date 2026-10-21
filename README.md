@@ -49,6 +49,11 @@ Kişisel bilgi kütüphaneni oluştur
 ### 📖 Read Mode — Makaleyi kitap gibi oku
 
 - **Book View:** Çift sütunlu sayfalardan okunabilir, tek sütunlu mobil düzene geçiş.
+- **Kitap, Dergi, sayfa sayfa, Orijinal:** Aynı makaleyi kitap gibi (tek sütun), dergi gibi (künye, bölüm başlıkları, büyük baş harf, geniş ekranda sütunlar), kaydırmadan çevrilen ekranlar olarak ya da orijinal sayfalarıyla oku; geçişte kaldığın yer korunur.
+- **İstediğin biçime dönüştür:** EPUB kitap, tek dosyalık web sayfası (Kitap/Dergi stili, dört renk teması), Markdown (+ resimler ZIP içinde) veya düz metin; cihazda üretilir, hiçbir şey yüklenmez.
+- **Linkle ekle:** PDF dosyası yerine arXiv numarası, DOI veya makale bağlantısı yapıştır; sunucu indirir (yalnızca herkese açık adresler) ve dönüştürür.
+- **Eksiksizlik kanıtı:** Dönüşüm, PDF metin katmanındaki her harf ve rakamın belgede olup olmadığını sayar; eksik ya da fazla varsa raporda ve okuyucuda söyler, kaybolan metni işaretli blok olarak geri koyar.
+- **Makalede bul, devam et:** Makale içi arama (büyük/küçük harf, aksan ve ligatür duyarsız), kaldığın yeri sunan “Okumaya devam et” kartı, kalan süre, odak modu.
 - **Kişiselleştirilebilir okuma:** Tema, yazı tipi, punto, satır aralığı ve okuma görünümü.
 - **Bilimsel yapıyı koruma hedefi:** Formüller, tablolar, görseller, atıflar ve kaynakça ile tutarlı sunum.
 - **Original ↔ Book:** Bir bölümün orijinal PDF'deki konumuna dönebilme.
@@ -181,13 +186,16 @@ Farkımız tek bir özellik değil; okuma rahatlığını, kaynak güvenilirliğ
 
 🚧 **Çalışan prototip — henüz ürün değil**
 
-Üç fazın tamamı uygulandı ve otomatik testlerden (backend, mobil birim, Playwright ile uçtan uca web akışları) geçiyor. Bu, ürünün hazır olduğu anlamına **gelmez**:
+Üç fazın tamamı ve sonradan eklenenler (eksiksizlik denetimi, linkle içe aktarma, okuma biçimleri, biçim dönüştürme, makalede bul) uygulandı ve otomatik testlerden (backend, mobil birim, Playwright ile uçtan uca web akışları) geçiyor. Bu, ürünün hazır olduğu anlamına **gelmez**:
 
 - Ayrıştırıcı sentetik makaleler ve iki bağımsız araçla (LibreOffice, Chromium) üretilmiş PDF'lerle doğrulandı. **Gerçek akademik makalelerle denenmedi** (geliştirme ortamında erişilemedi).
 - Mobil uygulama web derlemesinde ve telefon boyutlu Chromium'da doğrulandı; Android/iOS paketleri derleniyor ama **cihazda çalıştırılmadı**.
 - AI özellikleri sahte bir OpenAI uyumlu sunucuyla sınandı; **gerçek bir model denenmedi**.
 - Anlama kazanımı, kullanıcı tercihi ve geri dönüş ölçütleri için **kullanıcı testi yapılmadı**.
-- Kapsam dışı: OCR (taranmış PDF'ler “desteklenmiyor” diye işaretlenir), LaTeX üretimi, 3+ sütunlu düzenlerde güvenilir okuma sırası, sayfa sayfa okuma modu.
+- “Bir harf bile eksik olmaz” iddiası **PDF'in metin katmanı** için geçerlidir ve sayılarak denetlenir; sentetik, LibreOffice ve Chromium PDF'lerinde bağımsız bir PDF motoru (pdfium) ve pandoc ile doğrulandı. Taranmış PDF'lerde (OCR yok) ya da yazının eğriye çevrildiği PDF'lerde metin katmanı yoktur; bunlar “desteklenmiyor” diye işaretlenir.
+- Linkle içe aktarma yerel bir test sitesiyle sınandı; **gerçek arXiv/yayıncı sitelerine bu ortamda erişilemediği için denenmedi** (çözümleyici kuralları birim testlerle doğrulandı).
+- Dergi stili ve sayfa sayfa okuma yalnızca Chromium'da doğrulandı; cihaz WebView'ında denenmedi.
+- Kapsam dışı: OCR, LaTeX üretimi, 3+ sütunlu düzenlerde güvenilir okuma sırası.
 
 Sıradaki adım, küçük bir gerçek PDF seti ve gerçek kullanıcı testleriyle Book View kalitesini doğrulamaktır ([protokol](docs/EVALUATION.md#5-gerçek-pdf-seti-ile-doğrulama-protokolü-önerilen-sonraki-adım)).
 
