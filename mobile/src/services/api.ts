@@ -22,6 +22,7 @@ export interface Capabilities {
   uploads_persisted: boolean;
   ai: { enabled: boolean; vision: boolean };
   sync: { enabled: boolean };
+  url_import?: boolean;
 }
 
 export interface SyncWireRecord {
@@ -99,6 +100,15 @@ export class FolumeApi {
 
   capabilities(): Promise<Capabilities> {
     return this.json('/v1/capabilities');
+  }
+
+  /** The server downloads the paper itself (arXiv id, DOI, page or PDF link) and converts it. */
+  uploadUrl(url: string): Promise<JobStatus> {
+    return this.json('/v1/documents/from-url', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url }),
+    });
   }
 
   upload(form: FormData): Promise<JobStatus> {

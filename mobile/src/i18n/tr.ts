@@ -24,7 +24,7 @@ export const tr = {
   'library.import': 'PDF içe aktar',
   'library.empty.title': 'İlk makalenle başla',
   'library.empty.body':
-    'Erişim hakkın olan bir akademik makaleyi PDF olarak içe aktar. Çift sütunlu sayfa, telefonda rahat okunan tek sütunlu bir görünüme dönüşür.',
+    'Bir akademik makaleyi PDF dosyası olarak ekleyin ya da bağlantısını, arXiv numarasını veya DOI’sini yapıştırın. İki sütunlu sayfa, telefonda rahat okunan tek sütunlu görünüme dönüşür.',
   'library.empty.point1': 'Kitap görünümü: tek sütun, ayarlanabilir yazı tipi ve tema',
   'library.empty.point2': 'Her paragraf orijinal PDF konumuna bağlı kalır',
   'library.empty.point3': 'Dönüşümde emin olunmayan yerler açıkça işaretlenir',
@@ -445,6 +445,23 @@ export const tr = {
   'sync.erase': 'Sunucudaki verilerimi sil',
   'sync.erase.confirm': 'Bu anahtarla sunucuda saklanan tüm kayıtlar silinsin mi? Cihazındaki veriler silinmez.',
   'sync.erase.done': 'Sunucudaki kayıtların silindi.',
+  'import.phase.fetching': 'Makale bağlantıdan indiriliyor',
+  'import.error.invalid_url': 'Bu bir makale bağlantısına benzemiyor. Bir sayfa/PDF bağlantısı, arXiv numarası (2401.01234) ya da DOI yapıştırın.',
+  'import.error.url_not_allowed': 'Bu adres kullanılamaz: sunucu yalnızca herkese açık internet adreslerinden indirir.',
+  'import.error.fetch_failed': 'Makale bu bağlantıdan indirilemedi. Bağlantıyı tarayıcıda açıp “PDF” bağlantısını kopyalamayı deneyin.',
+  'import.error.timeout': 'İndirme ya da dönüştürme çok uzun sürdü ve durduruldu.',
+  'import.error.url_import_disabled': 'Bu sunucuda bağlantıdan içe aktarma kapalı. PDF dosyasını seçin.',
+  'import.error.page_too_large': 'PDF’teki bir sayfa desteklenenden çok büyük.',
+  'import.error.too_complex': 'Belge dönüştürülemeyecek kadar büyük ya da karmaşık.',
+  'library.importLink': 'Bağlantıdan ekle',
+  'link.title': 'Makaleyi bağlantıdan ekle',
+  'link.hint': 'Sayfa ya da PDF bağlantısı, arXiv numarası (2401.01234) veya DOI yapıştırın. Makaleyi sunucu indirir ve dönüştürür; sunucuda saklanmaz.',
+  'link.placeholder': 'https://arxiv.org/abs/2401.01234',
+  'link.kind.arxiv': 'arXiv {label}',
+  'link.kind.doi': 'DOI {label}',
+  'link.kind.url': '{label} adresinden indirilecek',
+  'link.invalid': 'Bu bir makale bağlantısına benzemiyor.',
+  'link.go': 'İndir ve dönüştür',
 } as const;
 
 export type StringKey = keyof typeof tr;

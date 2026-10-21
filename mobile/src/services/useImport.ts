@@ -19,7 +19,7 @@ export function useImport(onDone: (entry: LibraryEntry) => void) {
     async (source: PdfSource) => {
       const controller = new AbortController();
       abort.current = controller;
-      setState({ status: 'running', name: source.name, progress: { phase: 'uploading', fraction: 0 } });
+      setState({ status: 'running', name: source.name, progress: { phase: source.kind === 'url' ? 'fetching' : 'uploading', fraction: 0 } });
       try {
         const { blobs, library } = getStores();
         const entry = await importPdf(

@@ -6,8 +6,10 @@ from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, Response
+from pydantic import BaseModel, ConfigDict, Field
 
 from .. import __version__
+from ..fetch import InvalidSource, resolve_source
 from ..jobs import JobManager, QueueFull
 
 router = APIRouter()
@@ -33,7 +35,34 @@ def capabilities(request: Request) -> dict:
         "uploads_persisted": False,
         "ai": {"enabled": request.app.state.ai.status().enabled, "vision": request.app.state.ai.status().vision},
         "sync": {"enabled": s.sync_enabled},
+        "url_import": s.url_import,
     }
+
+
+class UrlRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    url: str = Field(max_length=2048, description="Page link, PDF link, arXiv id or DOI")
+
+
+@router.post("/documents/from-url", status_code=202)
+def import_from_url(body: UrlRequest, request: Request) -> dict:
+    """Download a paper from a link and convert it, as one job. The link itself is never echoed back."""
+    settings = request.app.state.settings
+    if not settings.url_import:
+        raise HTTPException(status_code=404, detail={"code": "url_import_disabled",
+                                                     "message": "Importing from a link is not enabled on this server"})
+    try:
+        candidates = resolve_source(body.url)
+    except InvalidSource:
+        raise HTTPException(status_code=422, detail={"code": "invalid_url",
+                                                     "message": "This does not look like a link to a paper"}) from None
+    try:
+        job = _jobs(request).submit_url(candidates)
+    except QueueFull:
+        raise HTTPException(status_code=429, detail={
+            "code": "busy", "message": "Too many conversions in progress; try again shortly"}) from None
+    return job.public()
 
 
 @router.post("/documents", status_code=202)

@@ -29,6 +29,10 @@ class Settings:
     workers: int = 2
     data_dir: Path = field(default_factory=lambda: Path(tempfile.gettempdir()) / "folume-jobs")
     cors_origins: list[str] = field(default_factory=list)
+    # importing a paper from a link: the server downloads it, so private networks are off limits unless allowed
+    url_import: bool = True
+    allow_private_urls: bool = False
+    url_timeout_seconds: float = 60.0
     # AI gateway (all optional: without a model the gateway answers from the supplied passages only)
     llm_base_url: str | None = None
     llm_api_key: str | None = None
@@ -56,6 +60,9 @@ class Settings:
             workers=int(e.get("FOLUME_WORKERS", defaults.workers)),
             data_dir=Path(e.get("FOLUME_DATA_DIR", str(defaults.data_dir))),
             cors_origins=[o.strip() for o in e.get("FOLUME_CORS_ORIGINS", "").split(",") if o.strip()],
+            url_import=_bool(e.get("FOLUME_URL_IMPORT"), defaults.url_import),
+            allow_private_urls=_bool(e.get("FOLUME_ALLOW_PRIVATE_URLS")),
+            url_timeout_seconds=float(e.get("FOLUME_URL_TIMEOUT_SECONDS", defaults.url_timeout_seconds)),
             llm_base_url=e.get("FOLUME_LLM_BASE_URL") or None,
             llm_api_key=e.get("FOLUME_LLM_API_KEY") or None,
             llm_model=e.get("FOLUME_LLM_MODEL") or None,

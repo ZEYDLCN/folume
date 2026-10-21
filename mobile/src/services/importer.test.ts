@@ -19,6 +19,54 @@ function setup(serverOpts: Partial<Parameters<typeof createFakeServer>[0]> = {},
 
 const pdf = { kind: 'bytes' as const, bytes: new TextEncoder().encode('%PDF-1.4 test'), name: 'paper.pdf' };
 
+describe('importPdf from a link', () => {
+  const link = { kind: 'url' as const, url: 'https://arxiv.org/abs/2401.01234', name: 'arxiv.org' };
+
+  it('asks the server to fetch the paper, reports the download, stores everything but has no original PDF', async () => {
+    const { server, blobs, library, deps } = setup({ processingPolls: 2 });
+    const progress: ImportProgress[] = [];
+    const entry = await importPdf(link, deps, (p) => progress.push(p));
+
+    expect(server.calls[0]).toBe('POST /v1/documents/from-url');
+    expect(server.urlBodies).toEqual([{ url: 'https://arxiv.org/abs/2401.01234' }]);
+    expect(entry).toMatchObject({ id: ieeeMl.id, hasOriginalPdf: false });
+    expect(await blobs.exists(`docs/${ieeeMl.id}/original.pdf`)).toBe(false);
+    expect(await library.loadDocument(ieeeMl.id)).toMatchObject({ id: ieeeMl.id });
+    expect(server.deleted).toHaveLength(1);
+    const phases = progress.map((p) => p.phase);
+    expect(phases[0]).toBe('fetching');
+    expect(phases).toContain('converting');
+    const fractions = progress.map((p) => p.fraction);
+    expect(fractions).toEqual([...fractions].sort((a, b) => a - b));
+  });
+
+  it('keeps reading progress when the paper is already in the library', async () => {
+    const { library, deps } = setup();
+    await importPdf(pdf, deps);
+    await library.saveState(ieeeMl.id, { percent: 55 });
+    await importPdf(link, deps);
+    expect((await library.getState(ieeeMl.id)).percent).toBe(55);
+    expect((await library.list()).length).toBe(1);
+  });
+
+  it('turns the server\'s reasons into import errors and still deletes the job', async () => {
+    const blocked = setup({ failUrl: { code: 'url_not_allowed', message: 'x' } });
+    await expect(importPdf(link, blocked.deps)).rejects.toMatchObject({ name: 'ImportError', code: 'url_not_allowed' });
+    expect(blocked.server.deleted).toHaveLength(1);
+    const missing = setup({ failUrl: { code: 'fetch_failed', message: 'The server answered 404' } });
+    await expect(importPdf(link, missing.deps)).rejects.toMatchObject({ code: 'fetch_failed' });
+    const bad = setup();
+    await expect(importPdf({ ...link, url: 'javascript:alert(1)' }, bad.deps)).rejects.toMatchObject({ code: 'invalid_url' });
+  });
+
+  it('can be cancelled while the server is still downloading', async () => {
+    const { deps } = setup({ processingPolls: 50 });
+    const controller = new AbortController();
+    const sleep = async () => controller.abort();
+    await expect(importPdf(link, { ...deps, sleep }, undefined, controller.signal)).rejects.toMatchObject({ code: 'cancelled' });
+  });
+});
+
 describe('importPdf', () => {
   it('uploads, converts, downloads every asset, stores locally and deletes the server job', async () => {
     const { server, blobs, library, deps } = setup({ processingPolls: 2 });

@@ -8,9 +8,11 @@ import { ApiError, type FolumeApi } from './api';
 export type PdfSource =
   | { kind: 'uri'; uri: string; name: string; size?: number }
   | { kind: 'blob'; blob: Blob; name: string }
-  | { kind: 'bytes'; bytes: Uint8Array; name: string };
+  | { kind: 'bytes'; bytes: Uint8Array; name: string }
+  /** a link to the paper: the server fetches it */
+  | { kind: 'url'; url: string; name: string };
 
-export type ImportPhase = 'uploading' | 'converting' | 'downloading' | 'saving' | 'done';
+export type ImportPhase = 'fetching' | 'uploading' | 'converting' | 'downloading' | 'saving' | 'done';
 
 export interface ImportProgress {
   phase: ImportPhase;
@@ -47,7 +49,7 @@ async function defaultReadUri(uri: string): Promise<Uint8Array> {
   return new Uint8Array(await res.arrayBuffer());
 }
 
-export function buildForm(source: PdfSource): FormData {
+export function buildForm(source: Exclude<PdfSource, { kind: 'url' }>): FormData {
   const form = new FormData();
   if (source.kind === 'uri') {
     // React Native's FormData streams `{ uri, name, type }` objects from disk
@@ -77,7 +79,10 @@ async function mapLimit<T>(items: T[], limit: number, work: (item: T, index: num
   await Promise.all(runners);
 }
 
-const USER_FACING = new Set(['not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized']);
+const USER_FACING = new Set([
+  'not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized',
+  'invalid_url', 'url_not_allowed', 'fetch_failed', 'timeout', 'url_import_disabled', 'page_too_large', 'too_complex',
+]);
 
 /**
  * Upload → convert on the server → download → store locally → delete the server job.
@@ -97,14 +102,21 @@ export async function importPdf(
   };
   let jobId: string | null = null;
   try {
-    onProgress({ phase: 'uploading', fraction: 0.02 });
-    let job = await api.upload(buildForm(source));
+    const fromLink = source.kind === 'url';
+    onProgress({ phase: fromLink ? 'fetching' : 'uploading', fraction: 0.02 });
+    let job = source.kind === 'url' ? await api.uploadUrl(source.url) : await api.upload(buildForm(source));
     jobId = job.id;
-    onProgress({ phase: 'uploading', fraction: 0.1 });
+    onProgress({ phase: fromLink ? 'fetching' : 'uploading', fraction: 0.1 });
 
     while (job.status === 'queued' || job.status === 'processing') {
       check();
-      onProgress({ phase: 'converting', fraction: 0.1 + 0.6 * Math.min(1, job.progress), stage: job.stage });
+      // while the server is still downloading the paper the phase says so; afterwards it is the same conversion
+      const downloading = fromLink && job.stage === 'download';
+      onProgress({
+        phase: downloading ? 'fetching' : 'converting',
+        fraction: 0.1 + 0.6 * Math.min(1, job.progress),
+        stage: downloading ? undefined : job.stage,
+      });
       await sleep(poll);
       job = await api.job(job.id);
     }
@@ -127,7 +139,8 @@ export async function importPdf(
 
     onProgress({ phase: 'saving', fraction: 0.96 });
     let original: Uint8Array | null = null;
-    if (source.kind === 'bytes') original = source.bytes;
+    if (source.kind === 'url') original = null; // the server fetched it and keeps nothing; the page images are the original
+    else if (source.kind === 'bytes') original = source.bytes;
     else if (source.kind === 'blob') original = new Uint8Array(await source.blob.arrayBuffer());
     else original = await (deps.readUri ?? defaultReadUri)(source.uri).catch(() => null);
     if (original) await blobs.put(`${docPath(doc.id)}/original.pdf`, original);

@@ -8,7 +8,8 @@ import type { StringKey } from '@/i18n';
 
 const KNOWN_ERRORS = new Set([
   'not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized', 'network',
-  'conversion_failed', 'cancelled', 'unknown',
+  'conversion_failed', 'cancelled', 'unknown', 'invalid_url', 'url_not_allowed', 'fetch_failed', 'timeout',
+  'url_import_disabled', 'page_too_large', 'too_complex',
 ]);
 
 export function ImportOverlay({

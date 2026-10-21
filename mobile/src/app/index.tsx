@@ -4,6 +4,7 @@ import { Alert, FlatList, Platform, Pressable, ScrollView, TextInput, View } fro
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { LibraryCard } from '@/features/library/LibraryCard';
+import { LinkSheet } from '@/features/library/LinkSheet';
 import { TagsSheet } from '@/features/library/TagsSheet';
 import { ImportOverlay } from '@/features/library/ImportOverlay';
 import type { LibraryEntry } from '@/data/library';
@@ -23,6 +24,7 @@ export default function LibraryScreen() {
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [tagging, setTagging] = useState<LibraryEntry | null>(null);
+  const [linkOpen, setLinkOpen] = useState(false);
   const [due, setDue] = useState(0);
   const lastSource = useRef<PdfSource | null>(null);
 
@@ -179,9 +181,23 @@ export default function LibraryScreen() {
         />
 
         <View style={{ position: 'absolute', left: 0, right: 0, bottom: space.xl, alignItems: 'center' }} pointerEvents="box-none">
-          <Button label={t('library.import')} icon="document-attach-outline" onPress={startImport} testID="import-button" />
+          <View style={{ flexDirection: 'row', gap: space.sm, alignItems: 'center' }}>
+            <Button label={t('library.import')} icon="document-attach-outline" onPress={startImport} testID="import-button" />
+            <Button label={t('library.importLink')} icon="link-outline" variant="secondary" onPress={() => setLinkOpen(true)} testID="import-link-button" />
+          </View>
         </View>
       </View>
+
+      <LinkSheet
+        visible={linkOpen}
+        onClose={() => setLinkOpen(false)}
+        onSubmit={(url, label) => {
+          setLinkOpen(false);
+          const source: PdfSource = { kind: 'url', url, name: label };
+          lastSource.current = source;
+          void imp.start(source);
+        }}
+      />
 
       <TagsSheet
         visible={tagging !== null}

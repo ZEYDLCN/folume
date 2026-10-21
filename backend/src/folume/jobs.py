@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .config import Settings
+from .fetch import Fetcher, FetchError
 from .parsing.pipeline import ParseError, ParseOptions, parse_pdf
 
 log = logging.getLogger(__name__)
@@ -127,6 +128,20 @@ class JobManager:
         self._pool.submit(self._run, job, data)
         return job
 
+    def submit_url(self, candidates: list[str]) -> Job:
+        """Queue a conversion of a paper that has to be downloaded first (the download is part of the job)."""
+        self.sweep()
+        with self._lock:
+            active = sum(1 for j in self.jobs.values() if j.status in ("queued", "processing"))
+            if active >= self.settings.max_queued_jobs:
+                raise QueueFull()
+            now = time.time()
+            job = Job(id=uuid.uuid4().hex, filename="paper.pdf", created=now, expires=now + self.settings.job_ttl_seconds,
+                      stage="download")
+            self.jobs[job.id] = job
+        self._pool.submit(self._run_url, job, candidates)
+        return job
+
     def get(self, job_id: str) -> Job | None:
         self.sweep()
         return self.jobs.get(job_id)
@@ -152,6 +167,28 @@ class JobManager:
             job.stage, job.fraction = stage, fraction
 
         return report
+
+    def _run_url(self, job: Job, candidates: list[str]) -> None:
+        job.status = "processing"
+        job.stage, job.fraction = "download", 0.01
+        fetcher = Fetcher(allow_private=self.settings.allow_private_urls, timeout=self.settings.url_timeout_seconds,
+                          max_bytes=self.settings.max_upload_mb * 1024 * 1024)
+        try:
+            result = fetcher.fetch_any(candidates)
+        except FetchError as exc:
+            job.error = {"code": exc.code, "message": exc.message}
+            job.status = "failed"
+            job.expires = time.time() + self.settings.job_ttl_seconds
+            return
+        except Exception:
+            log.exception("download failed for job %s", job.id)  # (never the address: it may carry a token)
+            job.error = {"code": "fetch_failed", "message": "The paper could not be downloaded"}
+            job.status = "failed"
+            job.expires = time.time() + self.settings.job_ttl_seconds
+            return
+        job.filename = result.filename
+        job.fraction = 0.02
+        self._run(job, result.data)
 
     def _run(self, job: Job, data: bytes) -> None:
         job.status = "processing"
