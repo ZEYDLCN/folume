@@ -1,0 +1,12 @@
+{
+  "name": "folume-e2e",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "reader": "node reader-runtime.mjs",
+    "app": "node app-flow.mjs"
+  },
+  "dependencies": {
+    "playwright-core": "^1.56.1"
+  }
+}
