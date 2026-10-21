@@ -71,10 +71,12 @@ export class SyncEngine {
     let pushed = 0;
     for (let i = 0; i < pending.length; i += BATCH) {
       const batch = pending.slice(i, i + BATCH);
-      await this.transport.syncPush(
+      const res = await this.transport.syncPush(
         namespace,
         batch.map((r) => ({ key: r.key, updated_at: r.updatedAt, deleted: r.deleted, data: r.deleted ? null : r.data })),
       );
+      // when nobody else wrote in between, the changes just made are ours: skip reading them back next time
+      if (res.seq - res.accepted === meta.cursor) meta.cursor = res.seq;
       for (const r of batch) meta.pushed[r.key] = r.updatedAt;
       pushed += batch.length;
       await this.save(namespace, meta);

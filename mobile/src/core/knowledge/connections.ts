@@ -18,6 +18,8 @@ export interface ConceptRef {
   term: string;
   definition: ConceptDefinition | null;
   blockId: string | null;
+  /** up to three blocks that show how the paper uses it, the defining block first */
+  blockIds: string[];
   count: number;
 }
 
@@ -39,12 +41,10 @@ export interface Connection {
   shared: SharedConcept[];
 }
 
-const refOf = (c: Concept): ConceptRef => ({
-  term: c.term,
-  definition: c.definition,
-  blockId: c.definition?.blockId ?? c.blockIds[0] ?? null,
-  count: c.count,
-});
+const refOf = (c: Concept): ConceptRef => {
+  const blockIds = [...new Set([...(c.definition ? [c.definition.blockId] : []), ...c.blockIds])].slice(0, 3);
+  return { term: c.term, definition: c.definition, blockId: blockIds[0] ?? null, blockIds, count: c.count };
+};
 
 /** Every spelling under which a concept can be recognised elsewhere ("Large Language Model", "LLM"). */
 const matchKeys = (c: Concept): string[] => [c.key, ...c.aliases.map(normalizeTerm)].filter(Boolean);

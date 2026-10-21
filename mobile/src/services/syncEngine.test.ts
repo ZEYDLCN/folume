@@ -98,6 +98,40 @@ describe('SyncEngine', () => {
     expect(server.pushes).toBe(1);
   });
 
+  it('does not read back its own changes, but still reads what others wrote in between', async () => {
+    const server = new FakeSyncServer();
+    const a = device(1_000, server);
+    const b = device(2_000, server);
+    await a.annotations.add(note('mine'));
+    expect(await a.engine.run(NS)).toMatchObject({ pushed: 1, pulled: 0 });
+    expect(await a.engine.run(NS)).toMatchObject({ pushed: 0, pulled: 0 });
+    // another device writes after A's last sync: A must still receive it
+    await b.annotations.add(note('theirs'));
+    await b.engine.run(NS);
+    const next = await a.engine.run(NS);
+    expect(next.pulled).toBeGreaterThanOrEqual(1);
+    expect((await a.annotations.list(ieeeMl.id)).map((x) => x.note).sort()).toEqual(['mine', 'theirs']);
+  });
+
+  it('keeps reading the other device’s changes that landed between its pull and its push', async () => {
+    const server = new FakeSyncServer();
+    const a = device(1_000, server);
+    const b = device(2_000, server);
+    await a.annotations.add(note('mine'));
+    // B writes right after A pulled but before A pushes
+    const realPull = server.syncPull.bind(server);
+    server.syncPull = async (ns, since, limit) => {
+      const res = await realPull(ns, since, limit);
+      server.syncPull = realPull;
+      await b.annotations.add(note('slipped in'));
+      await b.engine.run(NS);
+      return res;
+    };
+    await a.engine.run(NS);
+    await a.engine.run(NS);
+    expect((await a.annotations.list(ieeeMl.id)).map((x) => x.note).sort()).toEqual(['mine', 'slipped in']);
+  });
+
   it('when both edit the same note, the later edit wins on both devices', async () => {
     const server = new FakeSyncServer();
     const a = device(1_000, server);

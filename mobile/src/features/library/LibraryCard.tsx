@@ -9,10 +9,14 @@ export function LibraryCard({
   entry,
   onOpen,
   onDelete,
+  onTags,
+  onConnections,
 }: {
   entry: LibraryEntry;
   onOpen: () => void;
   onDelete: () => void;
+  onTags: () => void;
+  onConnections: () => void;
 }) {
   const t = useT();
   const quality =
@@ -31,8 +35,17 @@ export function LibraryCard({
               </AppText>
             ) : null}
           </View>
+          <IconButton icon="git-network-outline" label={t('library.connections')} onPress={onConnections} size={20} testID={`connections-${entry.id}`} />
+          <IconButton icon="pricetag-outline" label={t('library.tags')} onPress={onTags} size={20} testID={`tags-${entry.id}`} />
           <IconButton icon="trash-outline" label={t('common.delete')} onPress={onDelete} size={20} testID={`delete-${entry.id}`} />
         </View>
+        {entry.tags.length ? (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }} testID={`tag-list-${entry.id}`}>
+            {entry.tags.map((tag) => (
+              <Badge key={tag} label={tag} />
+            ))}
+          </View>
+        ) : null}
         <View style={{ flexDirection: 'row', gap: space.sm, flexWrap: 'wrap', alignItems: 'center' }}>
           <AppText variant="caption" muted>
             {t('common.pages', { n: entry.pageCount })}

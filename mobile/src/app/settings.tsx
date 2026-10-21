@@ -1,16 +1,20 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Alert, Platform } from 'react-native';
 import { ScrollView, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { LocaleSetting } from '@/i18n';
 import { getApi } from '@/services/container';
+import { eraseRemote, lastSyncAt, MIN_SYNC_KEY_LENGTH, runSync, syncErrorKey } from '@/services/sync';
 import type { Capabilities } from '@/services/api';
 import { useSettings, type AiPrefs, type AppTheme } from '@/state/settings';
 import { AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
+
+type SyncUi = { status: 'idle' } | { status: 'busy' } | { status: 'ok'; text: string } | { status: 'error'; text: string };
 
 type Test = { status: 'idle' } | { status: 'busy' } | { status: 'ok'; version: string; caps: Capabilities } | { status: 'error'; message: string };
 
@@ -22,6 +26,43 @@ export default function SettingsScreen() {
   const [url, setUrl] = useState(s.serverUrl);
   const [key, setKey] = useState(s.apiKey);
   const [test, setTest] = useState<Test>({ status: 'idle' });
+  const [syncKey, setSyncKey] = useState(s.syncKey);
+  const [syncUi, setSyncUi] = useState<SyncUi>({ status: 'idle' });
+  const [last, setLast] = useState<number | null>(null);
+  useEffect(() => {
+    void lastSyncAt().then(setLast);
+  }, [syncUi.status]);
+  const keyOk = syncKey.trim().length >= MIN_SYNC_KEY_LENGTH;
+
+  const syncNow = async () => {
+    setSyncUi({ status: 'busy' });
+    await s.update({ syncKey: syncKey.trim() });
+    try {
+      const r = await runSync();
+      setSyncUi({ status: 'ok', text: t('sync.result', { pulled: r.pulled, pushed: r.pushed }) });
+    } catch (e) {
+      setSyncUi({ status: 'error', text: t(syncErrorKey(e)) });
+    }
+  };
+
+  const erase = async () => {
+    const go = async () => {
+      try {
+        await eraseRemote();
+        setSyncUi({ status: 'ok', text: t('sync.erase.done') });
+      } catch (e) {
+        setSyncUi({ status: 'error', text: t(syncErrorKey(e)) });
+      }
+    };
+    if (Platform.OS === 'web') {
+      if (window.confirm(t('sync.erase.confirm'))) await go();
+    } else {
+      Alert.alert(t('sync.erase'), t('sync.erase.confirm'), [
+        { text: t('common.cancel'), style: 'cancel' },
+        { text: t('common.delete'), style: 'destructive', onPress: () => void go() },
+      ]);
+    }
+  };
 
   const input = {
     backgroundColor: c.surfaceAlt,
@@ -178,6 +219,46 @@ export default function SettingsScreen() {
               ]}
             />
           </Field>
+        </Card>
+
+        <Card style={{ gap: space.md }} testID="sync-settings">
+          <AppText variant="heading">{t('sync.title')}</AppText>
+          <AppText muted>{t('sync.body')}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <AppText style={{ flex: 1 }}>{t('sync.enable')}</AppText>
+            <Switch value={s.sync.enabled} onValueChange={(enabled) => void s.updateSync({ enabled })} testID="switch-sync" />
+          </View>
+          {s.sync.enabled ? (
+            <View style={{ gap: space.md }}>
+              <Field label={t('sync.key')} hint={t('sync.key.hint')}>
+                <TextInput
+                  testID="sync-key"
+                  value={syncKey}
+                  onChangeText={setSyncKey}
+                  onBlur={() => void s.update({ syncKey: syncKey.trim() })}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  style={input}
+                  placeholderTextColor={c.muted}
+                />
+              </Field>
+              {syncKey.trim().length > 0 && !keyOk ? <AppText variant="caption" color={c.warn}>{t('sync.key.short')}</AppText> : null}
+              <Button label={t('sync.now')} variant="secondary" onPress={() => void syncNow()} disabled={!keyOk} loading={syncUi.status === 'busy'} testID="sync-now" />
+              {syncUi.status === 'ok' ? <AppText color={c.ok} testID="sync-ok">{syncUi.text}</AppText> : null}
+              {syncUi.status === 'error' ? <AppText color={c.danger} testID="sync-error">{syncUi.text}</AppText> : null}
+              <AppText variant="caption" muted testID="sync-last">
+                {last ? t('sync.last', { time: new Date(last).toLocaleString() }) : t('sync.never')}
+              </AppText>
+              <Button label={t('sync.erase')} variant="ghost" onPress={() => void erase()} disabled={!keyOk} testID="sync-erase" />
+            </View>
+          ) : null}
+        </Card>
+
+        <Card style={{ gap: space.sm }}>
+          <AppText variant="heading">{t('settings.data')}</AppText>
+          <AppText muted>{t('settings.data.open')}</AppText>
+          <Button label={t('settings.data')} variant="secondary" icon="folder-open-outline" onPress={() => router.push('/data')} testID="open-data" />
         </Card>
 
         <Card style={{ gap: space.md }}>

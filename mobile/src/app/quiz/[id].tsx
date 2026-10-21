@@ -6,6 +6,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AiClient } from '@/ai/client';
 import { buildQuizRequest } from '@/ai/requests';
 import { indexDocument, sectionBlocks, titleOf, type DocIndex } from '@/core/docModel';
+import { cardsFromMissed } from '@/core/learning/cards';
 import { clozeQuestions, type Question } from '@/core/learning/cloze';
 import { sectionLabel, type ContextPassage } from '@/core/retrieval/context';
 import type { Document } from '@/core/types';
@@ -56,6 +57,7 @@ export default function QuizScreen() {
   const [revealed, setRevealed] = useState(false);
   const [results, setResults] = useState<QuizItemResult[]>([]);
   const [error, setError] = useState<StringKey>('learn.error.unknown');
+  const [cardsAdded, setCardsAdded] = useState(0);
 
   useEffect(() => {
     void getStores().library.loadDocument(id).then(setDoc);
@@ -119,7 +121,10 @@ export default function QuizScreen() {
       setRevealed(false);
       return;
     }
-    await getStores().quizzes.add({ docId: id, sectionId, sectionTitle: section.title, mode, items: next });
+    const stores = getStores();
+    await stores.quizzes.add({ docId: id, sectionId, sectionTitle: section.title, mode, items: next });
+    // what was missed comes back later through spaced repetition, with a way back to the source
+    setCardsAdded(await stores.cards.add(cardsFromMissed(id, next, (blockId) => index.byId.get(blockId)?.source[0].page ?? 1)));
     setPhase('summary');
   };
 
@@ -294,6 +299,7 @@ export default function QuizScreen() {
             <Card style={{ gap: space.md }}>
               <AppText variant="title">{t('quiz.score', { c: score, n: results.length })}</AppText>
               <ProgressBar value={results.length ? score / results.length : 0} height={8} />
+              {cardsAdded > 0 ? <AppText variant="caption" muted testID="quiz-cards-added">{t('quiz.cardsAdded', { n: cardsAdded })}</AppText> : null}
               {results.some((r) => !r.correct && r.concept) ? (
                 <View style={{ gap: 4 }}>
                   <AppText variant="label" muted>{t('quiz.concepts')}</AppText>

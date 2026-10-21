@@ -19,6 +19,16 @@ export const citationSourceOf = (doc: Document): CitationSource => ({
   arxivId: doc.metadata.arxiv_id,
 });
 
+/** Library entries carry the same fields; `arxivId` is missing on entries saved before it was recorded. */
+export const citationSourceOfEntry = (e: {
+  id: string;
+  title: string;
+  authors: string[];
+  year: number | null;
+  doi: string | null;
+  arxivId?: string | null;
+}): CitationSource => ({ id: e.id, title: e.title, authors: e.authors, year: e.year, doi: e.doi, arxivId: e.arxivId ?? null });
+
 // ---------------------------------------------------------------------------------------------- names
 
 const PARTICLES = new Set(['van', 'von', 'der', 'den', 'de', 'del', 'della', 'di', 'da', 'dos', 'du', 'la', 'le', 'bin', 'ibn', 'al', 'el']);
