@@ -5,6 +5,7 @@ Skipped when LibreOffice is not installed. Ground truth comes from the same pape
 
 from __future__ import annotations
 
+import os
 import re
 from statistics import mean
 
@@ -15,7 +16,12 @@ from synth.spec import Figure, Heading, Para, Table
 
 from folume.parsing.pipeline import parse_pdf
 
-pytestmark = pytest.mark.skipif(not soffice_available(), reason="LibreOffice is not installed")
+# CI machines carry other tool versions and fonts than the ones these layouts were checked with, so there the tests
+# are opt-in (FOLUME_PRODUCER_TESTS=1); on a developer machine they run whenever the tool is installed.
+pytestmark = pytest.mark.skipif(
+    not soffice_available() or (bool(os.environ.get("CI")) and not os.environ.get("FOLUME_PRODUCER_TESTS")),
+    reason="LibreOffice is not installed (or CI without FOLUME_PRODUCER_TESTS=1)",
+)
 
 NAMES = ["ieee_ml", "acm_graph", "arxiv_bio"]
 
