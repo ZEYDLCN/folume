@@ -20,6 +20,11 @@ class Settings:
     max_upload_mb: int = 50
     max_pages: int = 300
     job_ttl_seconds: int = 3600  # result files are deleted after this, or right after the client deletes the job
+    # each conversion runs in its own process so a hostile or pathological PDF can be stopped and cannot take
+    # the server down: wall-clock limit and address-space limit (0 = unlimited)
+    isolate_jobs: bool = True
+    job_timeout_seconds: float = 300.0
+    max_memory_mb: int = 4096
     max_queued_jobs: int = 16
     workers: int = 2
     data_dir: Path = field(default_factory=lambda: Path(tempfile.gettempdir()) / "folume-jobs")
@@ -44,6 +49,9 @@ class Settings:
             max_upload_mb=int(e.get("FOLUME_MAX_UPLOAD_MB", defaults.max_upload_mb)),
             max_pages=int(e.get("FOLUME_MAX_PAGES", defaults.max_pages)),
             job_ttl_seconds=int(e.get("FOLUME_JOB_TTL_SECONDS", defaults.job_ttl_seconds)),
+            isolate_jobs=_bool(e.get("FOLUME_ISOLATE_JOBS"), defaults.isolate_jobs),
+            job_timeout_seconds=float(e.get("FOLUME_JOB_TIMEOUT_SECONDS", defaults.job_timeout_seconds)),
+            max_memory_mb=int(e.get("FOLUME_MAX_MEMORY_MB", defaults.max_memory_mb)),
             max_queued_jobs=int(e.get("FOLUME_MAX_QUEUED_JOBS", defaults.max_queued_jobs)),
             workers=int(e.get("FOLUME_WORKERS", defaults.workers)),
             data_dir=Path(e.get("FOLUME_DATA_DIR", str(defaults.data_dir))),

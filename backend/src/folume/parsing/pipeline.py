@@ -63,6 +63,9 @@ Progress = Callable[[str, float], None]
 log = logging.getLogger(__name__)
 
 
+MAX_PAGE_POINTS = 3000  # 41.7 in
+
+
 class ParseError(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -107,6 +110,9 @@ def parse_pdf(data: bytes, filename: str = "document.pdf", options: ParseOptions
         raise ParseError("empty_document", "The PDF has no pages")
     if len(pages) > opts.max_pages:
         raise ParseError("too_many_pages", f"The PDF has more than {opts.max_pages} pages")
+    if any(max(p.width, p.height) > MAX_PAGE_POINTS for p in pages):
+        # rendering an enormous page would use gigabytes of memory; papers are A4/Letter, posters rarely exceed this
+        raise ParseError("page_too_large", "A page is larger than this converter supports")
     report("extract", 0.3)
 
     sha = hashlib.sha256(data).hexdigest()
