@@ -67,6 +67,15 @@ Bu üreticiler sentetik külliyatın yakalamadığı **gerçek hataları** ortay
 
 Android ve iOS için `expo export` (Hermes paketleme) başarıyla derlenir; bu **cihazda çalıştırmak değildir**.
 
+### 2.4 Dayanıklılık
+
+- `tests/test_robustness.py`: kesik, bozuk, şifreli, boş ve anlamsız dosyalar; kontrol karakterli/çok dilli/çok küçük metin; çok sayfalı küçük PDF.
+  Beklenti: ya açık bir hata kodu (`unreadable_pdf`, …) ya da dürüstçe işaretlenmiş bir belge; asla çökme.
+- Tek seferlik tarama (testlere eklenmedi): sentetik, LibreOffice ve Chromium PDF'lerinden türetilmiş 210 rastgele bozulmuş dosya (bayt çevirme, kesme, sıfırlama):
+  115'i `unreadable_pdf` ile reddedildi, 95'i ayrıştırıldı, **0 çökme**.
+- Belge bağlantıları sunucudan gelen veridir: yalnızca `http(s)`, `mailto` ve DOI bağlantıları açılır (`mobile/src/core/links.ts`); okuyucu runtime'ı belge metnini hiçbir yerde HTML olarak yorumlamaz (`innerHTML` yok).
+- `tests/test_isolation.py`: zaman aşımı, bellek sınırı ve aşırı büyük sayfa; sunucu ve disk temiz kalır.
+
 ## 3. Performans notları (ölçüldü)
 
 Sentetik IEEE makaleleri, 2 çekirdekli geliştirme konteyneri:

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Linking, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { safeExternalUrl } from '@/core/links';
 import { indexDocument, titleOf, type DocIndex } from '@/core/docModel';
 import type { Document } from '@/core/types';
 import type { DocState } from '@/data/library';
@@ -160,9 +161,11 @@ export default function ReaderScreen() {
         case 'flags':
           setFlagsFor(e.blockId);
           break;
-        case 'link':
-          void Linking.openURL(e.url);
+        case 'link': {
+          const url = safeExternalUrl(e.url);
+          if (url) void Linking.openURL(url);
           break;
+        }
         case 'mode-changed':
           setMode(e.mode);
           save({ mode: e.mode });
