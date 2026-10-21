@@ -51,6 +51,8 @@ export interface ReaderStrings {
   empty_unsupported: string;
   footnote: string;
   original_pages: string;
+  figure_text: string;
+  table_text: string;
   check: string;
   check_hint: string;
   check_start: string;

@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from statistics import median
 
+from pypdfium2 import PdfiumError
+
 from .. import __version__
 from ..model import (
     Asset,
@@ -31,6 +33,7 @@ from ..model import (
     Span,
     TextLedger,
 )
+from .audit import audit_pages, letters
 from .equations import detect_equations
 from .furniture import detect_furniture
 from .layout import PageLayout, analyze_page, reading_order
@@ -57,7 +60,7 @@ from .structure import (
 )
 from .tables import extract_table
 from .textutil import Vocabulary, garbled_ratio, guess_language, has_garbled
-from .types import Char, Fragment, expand, inside_fraction, union
+from .types import Char, Fragment, expand, fragment_text, inside_fraction, union
 
 Progress = Callable[[str, float], None]
 log = logging.getLogger(__name__)
@@ -116,9 +119,14 @@ def parse_pdf(data: bytes, filename: str = "document.pdf", options: ParseOptions
     report("extract", 0.3)
 
     sha = hashlib.sha256(data).hexdigest()
-    renderer = Renderer(data)
+    try:
+        renderer = Renderer(data)
+    except PdfiumError as exc:
+        raise ParseError("unreadable_pdf", f"The PDF could not be rendered: {exc}") from exc
     try:
         return _convert(data, filename, sha, pages, info, renderer, opts, report)
+    except PdfiumError as exc:  # a page the renderer cannot load (damaged content stream)
+        raise ParseError("unreadable_pdf", f"The PDF could not be rendered: {exc}") from exc
     finally:
         renderer.close()
 
@@ -152,7 +160,9 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
                               unaccounted=total_chars, coverage=0.0 if total_chars else 1.0),
             pages=[PageQuality(page=p.number, layout="unknown", confidence=0.0, char_count=len(p.chars),
                                notes=["no text layer"]) for p in pages],
-            issues=[QualityIssue(flag=flag)], counts={"blocks": 0})
+            issues=[QualityIssue(flag=flag)], counts={"blocks": 0},
+            # nothing can be called complete when the PDF has no text layer to compare with (OCR is out of scope)
+            completeness=audit_pages(pages, [], []).model_copy(update={"complete": False}))
         doc = Document(id=doc_id, source=source, parser=parser, metadata=Metadata(title=info.get("title")),
                        pages=page_infos, sections=[], blocks=[], quality=quality, image_scale=opts.page_image_scale)
         return ParseResult(doc, assets)
@@ -253,6 +263,7 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
     report("structure", 0.75)
 
     blocks, sections, assets_extra, keywords = _to_model(flow, streams, renderer, opts, vocab)
+    blocks = _recover_unplaced(pages, blocks)
     assets.update(assets_extra)
     report("render", 0.92)
 
@@ -284,8 +295,24 @@ def _modal_gutter(layouts: dict[int, PageLayout]) -> tuple[float, float] | None:
 # ---- PBlock -> model ---------------------------------------------------------------------------------
 
 
-def _approx_equation_text(reg: Region) -> str:
-    """Best-effort linear text of an equation, rows top to bottom, with `_`/`^` for scripts."""
+def _region_text(reg: Region) -> str:
+    """The text layer inside a figure or table region, rows top to bottom (rotated labels last)."""
+    rows: list[list[Fragment]] = []
+    for f in sorted(reg.fragments, key=lambda f: (f.baseline, f.x0)):
+        if rows and abs(rows[-1][0].baseline - f.baseline) <= 3:
+            rows[-1].append(f)
+        else:
+            rows.append([f])
+    lines = [" ".join(f.text for f in sorted(r, key=lambda f: f.x0)).strip() for r in rows]
+    if reg.chars:
+        lines.append(rotated_text(reg.chars).strip())
+    return "\n".join(x for x in lines if x)
+
+
+def _approx_equation_text(reg: Region) -> tuple[str, str]:
+    """Best-effort linear text of an equation, rows top to bottom, with `_`/`^` for scripts.
+
+    Returns the text and the equation number row that was moved out of it (the number lives in `Block.number`)."""
     rows: list[list[Fragment]] = []
     for f in sorted(reg.fragments, key=lambda f: (f.baseline, f.x0)):
         if rows and abs(rows[-1][0].baseline - f.baseline) <= 3:
@@ -293,14 +320,16 @@ def _approx_equation_text(reg: Region) -> str:
         else:
             rows.append([f])
     parts = []
+    removed: list[str] = []
     for r in rows:
         chars = [c for f in r for c in f.chars]
         if reg.number and "".join(c.text for c in chars) == reg.number.replace(" ", ""):
+            removed.append("".join(c.text for c in chars))
             continue  # the equation number lives in `Block.number`
         ln = Line(page=reg.page, column=0, chars=chars, bbox=union([f.bbox for f in r]),
                   baseline=median(f.baseline for f in r), size=max(f.size for f in r), fragments=r)
         parts.append(text_of(line_spans(ln)))
-    return re.sub(r"\s+", " ", " ".join(parts)).strip()
+    return re.sub(r"\s+", " ", " ".join(parts)).strip(), " ".join(removed)
 
 
 def rotated_text(chars: list[Char]) -> str:
@@ -397,6 +426,8 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
         table = None
         level = None
         number = pb.number
+        prefix = ""
+        inner_text: str | None = None
         source: list[SourceRegion]
         btype = pb.type
 
@@ -419,6 +450,8 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
             asset = Asset(path=path, kind=pb.type, page=reg.page, bbox=_r(box), width=w, height=h,
                           transparent=pb.type == "equation")
             folded = [c for f in reg.fragments for c in f.chars] + list(reg.chars)
+            if pb.type in ("figure", "table"):
+                inner_text = _region_text(reg) or None
             if pb.type == "figure":
                 mark(folded, "figure")
                 if folded:
@@ -428,7 +461,10 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
             elif pb.type == "table":
                 mark(folded, "table")
                 tdata, tconf = extract_table(reg, tables_rules.get(reg.page, []))
-                if tdata is not None and tconf >= 0.75:
+                # cells are only trusted when they hold exactly the letters of the table region
+                complete_cells = tdata is not None and letters(" ".join(c for r in tdata.rows for c in r)) == letters(
+                    inner_text or "")
+                if tdata is not None and tconf >= 0.75 and complete_cells:
                     table = tdata
                     confidence = tconf
                 else:
@@ -436,8 +472,9 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                                              message="Table cells could not be recovered reliably; the image is shown"))
                     confidence = min(0.5, tconf)
             else:
-                mark(folded, "block")
-                text = _approx_equation_text(reg)
+                mark(folded, "equation")
+                text, removed = _approx_equation_text(reg)
+                prefix = removed
                 number = reg.number
                 flags.append(QualityFlag(code="formula_image_only", severity="info",
                                          message="Equation is shown as its original image; text is approximate"))
@@ -454,6 +491,8 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                 spans = [Span(text=title)]
                 level = pb.level
                 number = pb.extra.get("number")
+                prefix = number or ""
+                # the heading's own characters include the number: it is part of what the PDF said
             elif pb.type == "code":
                 text = "\n".join(ln.plain for ln in lines)
                 spans = [Span(text=text, mono=True)]
@@ -478,7 +517,7 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                 marker = re.match(r"^\s*(\d{1,2}|[*†‡§¶])\s*", text)
                 if marker and len(text) > marker.end():
                     number = marker.group(1)
-                    spans, text = _strip_prefix(spans, re.compile(r"^\s*(?:\d{1,2}|[*†‡§¶])\s*"))
+                    spans, text, prefix = _strip_prefix(spans, re.compile(r"^\s*(?:\d{1,2}|[*†‡§¶])\s*"))
             if pb.type == "reference":
                 confidence = 0.9
 
@@ -506,7 +545,7 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
             sections.append(sec)
             section_id = sec.id
         elif pb.type == "paragraph" and kind == "front" and spans and RUN_IN_ABSTRACT.match(text):
-            spans, text = _strip_prefix(spans, RUN_IN_ABSTRACT)
+            spans, text, prefix = _strip_prefix(spans, RUN_IN_ABSTRACT)
             kind = "abstract"
             sec = Section(id=f"s{len(sections) + 1}", title="Abstract", level=1, kind="abstract", block_id=bid,
                           start_page=pb.page)
@@ -525,14 +564,17 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                                          message="Bibliography entry could not be parsed into fields"))
                 confidence = min(confidence, 0.6)
             number = f"[{info.label}]" if info.label else None
+            label = re.match(r"^\s*\[\d+\]\s*", text)
+            if label:
+                prefix = label.group(0).strip()
             text = re.sub(r"^\s*\[\d+\]\s*", "", text)
             if spans:
-                spans, _ = _strip_prefix(spans, re.compile(r"^\s*\[\d+\]\s*"))
+                spans, _, _ = _strip_prefix(spans, re.compile(r"^\s*\[\d+\]\s*"))
 
         blocks.append(Block(
             id=bid, type=btype, text=text, spans=spans, level=level, number=number, section_id=section_id,
             source=source, confidence=round(confidence, 3), flags=flags, asset=asset, table=table,
-            reference=info,
+            reference=info, prefix=prefix or None, inner_text=inner_text,
         ))
 
     # caption links
@@ -551,11 +593,46 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
     return blocks, sections, assets, keywords
 
 
-def _strip_prefix(spans: list[Span], pattern: re.Pattern) -> tuple[list[Span], str]:
+def _recover_unplaced(pages, blocks: list[Block]) -> list[Block]:
+    """Characters that never reached a block (the layout analysis lost them) come back as flagged text.
+
+    One block per page, put after the last block of that page, so the reader still shows every character and
+    says plainly that this text sits out of order.
+    """
+    out = list(blocks)
+    for p in pages:
+        stray = [c for c in p.chars if c.status is None]
+        if not any(c.text.strip() for c in stray):
+            continue
+        rows: list[list[Char]] = []
+        for c in sorted(stray, key=lambda c: (c.baseline, c.x0)):
+            if rows and abs(rows[-1][-1].baseline - c.baseline) <= max(1.0, 0.5 * c.size):
+                rows[-1].append(c)
+            else:
+                rows.append([c])
+        text = " ".join(fragment_text(sorted(r, key=lambda c: c.x0)).strip() for r in rows).strip()
+        for c in stray:
+            c.status = "recovered"
+        if not text:
+            continue
+        box = union([c.bbox for c in stray if c.text.strip()])
+        block = Block(
+            id=f"r{p.number:03d}", type="paragraph", text=text, spans=[Span(text=text)],
+            source=[SourceRegion(page=p.number, bbox=_r(box))], confidence=0.4,
+            flags=[QualityFlag(code="text_recovered", severity="warning",
+                               message="Text the layout analysis could not place; shown here so no text is lost")],
+        )
+        at = max((i for i, b in enumerate(out) if b.source[0].page <= p.number), default=-1) + 1
+        out.insert(at, block)
+    return out
+
+
+def _strip_prefix(spans: list[Span], pattern: re.Pattern) -> tuple[list[Span], str, str]:
+    """Cut a matching prefix off the spans; returns the remaining spans, their text and the removed prefix."""
     text = "".join(s.text for s in spans)
     m = pattern.match(text)
     if not m:
-        return spans, text
+        return spans, text, ""
     cut = m.end()
     out: list[Span] = []
     pos = 0
@@ -569,7 +646,7 @@ def _strip_prefix(spans: list[Span], pattern: re.Pattern) -> tuple[list[Span], s
         else:
             out.append(s)
         pos = end
-    return out, "".join(s.text for s in out)
+    return out, "".join(s.text for s in out), text[:cut].strip()
 
 
 def _r(b) -> tuple[float, float, float, float]:
@@ -586,7 +663,8 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
     total = len(all_chars)
     unaccounted = tally.get("unaccounted", 0)
     ledger = TextLedger(
-        total_chars=total, in_blocks=tally.get("block", 0), in_figures=tally.get("figure", 0),
+        total_chars=total, in_blocks=tally.get("block", 0) + tally.get("equation", 0) + tally.get("recovered", 0),
+        in_figures=tally.get("figure", 0),
         in_tables=tally.get("table", 0), omitted=tally.get("omitted", 0), unaccounted=unaccounted,
         coverage=round((total - unaccounted) / total, 4) if total else 1.0,
     )
@@ -595,7 +673,7 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
         fr = f.fragment
         omitted.append(OmittedRegion(page=fr.page, bbox=_r(fr.bbox), reason=f.reason,
                                      char_count=sum(1 for c in fr.chars if not c.text.isspace()),
-                                     preview=fr.text[:80]))
+                                     preview=fr.text[:80], text=fr.text))
     by_page: dict[int, list[Char]] = {}
     for pno, c in rotated:
         by_page.setdefault(pno, []).append(c)
@@ -604,7 +682,7 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
     rotated_total = 0  # rotated text that is not a repeating stamp/watermark
     for pno, cs in by_page.items():
         omitted.append(OmittedRegion(page=pno, bbox=_r(union([c.bbox for c in cs])), reason="rotated_text",
-                                     char_count=len(cs), preview=texts[pno][:80]))
+                                     char_count=len(cs), preview=texts[pno][:80], text=texts[pno]))
         if re.sub(r"\d+", "#", texts[pno]) not in repeated:
             rotated_total += len(cs)
 
@@ -618,6 +696,12 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
         issues.append(QualityIssue(flag=QualityFlag(
             code="low_text_coverage", severity="warning",
             message=f"{unaccounted} of {total} characters could not be placed in the reading flow")))
+    completeness = audit_pages(pages, blocks, omitted)
+    if not completeness.complete:
+        issues.append(QualityIssue(flag=QualityFlag(
+            code="low_text_coverage", severity="warning",
+            message=f"{completeness.missing} letters or digits of the PDF text are missing from the document "
+                    f"and {completeness.extra} are not in the PDF")))
     page_quality: list[PageQuality] = []
     for p in pages:
         lay = layouts[p.number]
@@ -647,7 +731,7 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
     counts_d["blocks"] = len(blocks)
     counts_d["flagged_blocks"] = sum(1 for b in blocks if any(f.severity != "info" for f in b.flags))
     return DocumentQuality(score=score, grade=grade, ledger=ledger, pages=page_quality, omitted=omitted,
-                           issues=issues, counts=counts_d)
+                           issues=issues, counts=counts_d, completeness=completeness)
 
 
 # ---- metadata ---------------------------------------------------------------------------------------------

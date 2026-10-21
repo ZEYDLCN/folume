@@ -93,6 +93,7 @@ def _extract_page(page, number: int) -> RawPage:
             continue
         size = float(c.get("size") or 0) or float(c.get("height") or 0)
         if size <= 0.5:
+            raw.hidden += text
             continue
         matrix = c.get("matrix") or (1, 0, 0, 1, 0, 0)
         baseline = height - float(matrix[5]) if c.get("upright", True) else float(c["bottom"])
@@ -104,6 +105,7 @@ def _extract_page(page, number: int) -> RawPage:
         )
         # drop exact duplicates (fake-bold overprint)
         if last is not None and last.text == ch.text and abs(last.x0 - ch.x0) < 0.5 and abs(last.top - ch.top) < 0.5:
+            raw.duplicates += ch.text
             continue
         raw.chars.append(ch)
         last = ch

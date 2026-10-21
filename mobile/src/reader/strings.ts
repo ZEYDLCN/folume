@@ -25,6 +25,8 @@ export function readerStrings(): ReaderStrings {
     empty_unsupported: t('rt.empty_unsupported'),
     footnote: t('rt.footnote'),
     original_pages: t('rt.original_pages'),
+    figure_text: t('rt.figure_text'),
+    table_text: t('rt.table_text'),
     check: t('rt.check'),
     check_hint: t('rt.check_hint'),
     check_start: t('rt.check_start'),

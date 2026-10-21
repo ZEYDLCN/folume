@@ -55,6 +55,7 @@ FlagCode = Literal[
     "no_text_layer",  # scanned PDF: no extractable text (OCR is out of scope)
     "low_text_coverage",  # ledger could not account for enough of the text layer
     "rotated_text_skipped",  # rotated text exists and was not converted
+    "text_recovered",  # characters the layout analysis could not place; shown here so no text is lost
 ]
 
 
@@ -135,6 +136,16 @@ class Block(Model):
     caption_for: str | None = Field(default=None, description="caption -> its figure/table block")
     reference: ReferenceInfo | None = None
     latex: str | None = Field(default=None, description="Reserved; engines that can emit LaTeX fill it")
+    prefix: str | None = Field(
+        default=None,
+        description="Text the PDF showed in front of this block that was moved out of `text`: a heading number, "
+        "a reference label, a footnote marker, a run-in 'Abstract—'. `prefix + text` is what the PDF said.",
+    )
+    inner_text: str | None = Field(
+        default=None,
+        description="Text layer inside a figure or table (labels, axis ticks, cells), top to bottom; the image shows it, "
+        "this keeps it selectable and searchable so no character of the PDF is lost",
+    )
 
 
 class Section(Model):
@@ -208,6 +219,7 @@ class OmittedRegion(Model):
     reason: OmitReason
     char_count: int
     preview: str
+    text: str = Field(default="", description="The complete omitted text (`preview` is its start)")
 
 
 class TextLedger(Model):
@@ -228,6 +240,37 @@ class QualityIssue(Model):
     flag: QualityFlag
 
 
+class CompletenessProblem(Model):
+    """Where letters were lost or invented: the block (or just the page) and the letters concerned."""
+
+    block_id: str | None = None
+    page: int = Field(ge=1)
+    missing: str = Field(default="", description="Letters/digits of the PDF text that are not in the block (shortened)")
+    extra: str = Field(default="", description="Letters/digits in the block that the PDF does not have (shortened)")
+
+
+class Completeness(Model):
+    """Letter-by-letter comparison of the PDF text layer with the converted document.
+
+    Counts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).
+    `complete` is true when nothing is missing and nothing was invented.
+    """
+
+    complete: bool
+    letters_in_pdf: int
+    in_text: int = Field(description="Letters in reading text: paragraphs, headings, lists, captions, references, ...")
+    in_equations: int
+    in_tables: int
+    in_figures: int
+    omitted: int = Field(description="Running headers/footers, page numbers, stamps: kept out of the flow but listed in full")
+    duplicates: int = Field(description="Overprinted copies of the same glyph (fake bold): one copy is read")
+    hidden: int = Field(description="Invisible text smaller than half a point")
+    recovered: int = Field(description="Letters the layout analysis could not place; shown in flagged blocks")
+    missing: int
+    extra: int
+    problems: list[CompletenessProblem] = Field(default_factory=list)
+
+
 class DocumentQuality(Model):
     score: float = Field(ge=0, le=1)
     grade: Literal["good", "fair", "poor", "unsupported"]
@@ -236,6 +279,9 @@ class DocumentQuality(Model):
     omitted: list[OmittedRegion] = Field(default_factory=list)
     issues: list[QualityIssue] = Field(default_factory=list)
     counts: dict[str, int] = Field(default_factory=dict)
+    completeness: Completeness | None = Field(
+        default=None, description="Null only for documents without a text layer (nothing to compare)"
+    )
 
 
 class Document(Model):

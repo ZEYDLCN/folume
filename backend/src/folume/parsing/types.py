@@ -159,3 +159,6 @@ class RawPage:
     graphics: list[Bbox] = field(default_factory=list)  # non-rule paths, filled rects
     images: list[Bbox] = field(default_factory=list)
     rotation: int = 0
+    # text that was read but is not part of `chars`, kept so the completeness audit can account for it
+    hidden: str = ""  # glyphs below half a point (invisible)
+    duplicates: str = ""  # overprinted copies of a glyph already read (fake bold)

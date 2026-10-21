@@ -44,6 +44,10 @@ export interface Block {
   flags: QualityFlag[];
   id: string;
   /**
+   * Text layer inside a figure or table (labels, axis ticks, cells), top to bottom; the image shows it, this keeps it selectable and searchable so no character of the PDF is lost
+   */
+  inner_text: string | null;
+  /**
    * Reserved; engines that can emit LaTeX fill it
    */
   latex: string | null;
@@ -55,6 +59,10 @@ export interface Block {
    * Heading number, list marker, equation number or caption label
    */
   number: string | null;
+  /**
+   * Text the PDF showed in front of this block that was moved out of `text`: a heading number, a reference label, a footnote marker, a run-in 'Abstract—'. `prefix + text` is what the PDF said.
+   */
+  prefix: string | null;
   reference: ReferenceInfo | null;
   section_id: string | null;
   source: SourceRegion[];
@@ -127,7 +135,8 @@ export interface QualityFlag {
     | 'reference_unparsed'
     | 'no_text_layer'
     | 'low_text_coverage'
-    | 'rotated_text_skipped';
+    | 'rotated_text_skipped'
+    | 'text_recovered';
   /**
    * Short English fallback; the UI localizes from `code`
    */
@@ -240,6 +249,10 @@ export interface ParserInfo {
  * via the `definition` "DocumentQuality".
  */
 export interface DocumentQuality {
+  /**
+   * Null only for documents without a text layer (nothing to compare)
+   */
+  completeness: Completeness | null;
   counts: {
     [k: string]: number;
   };
@@ -249,6 +262,63 @@ export interface DocumentQuality {
   omitted: OmittedRegion[];
   pages: PageQuality[];
   score: number;
+}
+/**
+ * Letter-by-letter comparison of the PDF text layer with the converted document.
+ *
+ * Counts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).
+ * `complete` is true when nothing is missing and nothing was invented.
+ *
+ * This interface was referenced by `Document`'s JSON-Schema
+ * via the `definition` "Completeness".
+ */
+export interface Completeness {
+  complete: boolean;
+  /**
+   * Overprinted copies of the same glyph (fake bold): one copy is read
+   */
+  duplicates: number;
+  extra: number;
+  /**
+   * Invisible text smaller than half a point
+   */
+  hidden: number;
+  in_equations: number;
+  in_figures: number;
+  in_tables: number;
+  /**
+   * Letters in reading text: paragraphs, headings, lists, captions, references, ...
+   */
+  in_text: number;
+  letters_in_pdf: number;
+  missing: number;
+  /**
+   * Running headers/footers, page numbers, stamps: kept out of the flow but listed in full
+   */
+  omitted: number;
+  problems: CompletenessProblem[];
+  /**
+   * Letters the layout analysis could not place; shown in flagged blocks
+   */
+  recovered: number;
+}
+/**
+ * Where letters were lost or invented: the block (or just the page) and the letters concerned.
+ *
+ * This interface was referenced by `Document`'s JSON-Schema
+ * via the `definition` "CompletenessProblem".
+ */
+export interface CompletenessProblem {
+  block_id: string | null;
+  /**
+   * Letters/digits in the block that the PDF does not have (shortened)
+   */
+  extra: string;
+  /**
+   * Letters/digits of the PDF text that are not in the block (shortened)
+   */
+  missing: string;
+  page: number;
 }
 /**
  * This interface was referenced by `Document`'s JSON-Schema
@@ -302,6 +372,10 @@ export interface OmittedRegion {
   page: number;
   preview: string;
   reason: 'running_header' | 'running_footer' | 'page_number' | 'rotated_text' | 'outside_page' | 'unclassified';
+  /**
+   * The complete omitted text (`preview` is its start)
+   */
+  text: string;
 }
 /**
  * This interface was referenced by `Document`'s JSON-Schema

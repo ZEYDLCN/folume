@@ -44,6 +44,32 @@ await check('captions are shown with their figure and table, not twice', async (
   await r.close();
 });
 
+await check('text inside figures and tables stays reachable as real, selectable text', async () => {
+  const r = await openReader(browser, bundle);
+  const figs = doc.blocks.filter((b) => b.type === 'figure' && b.inner_text);
+  assert(figs.length === 2, `fixture should have two figures with text, has ${figs.length}`);
+  const found = await r.page.evaluate(() =>
+    [...document.querySelectorAll('#book .fig details.figtext')].map((d) => ({
+      summary: d.querySelector('summary')?.textContent,
+      text: d.querySelector('.figtext-body')?.textContent,
+      open: d.open,
+    })),
+  );
+  assert(found.length === 2, `figure text blocks: ${found.length}`);
+  assert(found.every((f) => !f.open), 'collapsed by default, so the reading flow stays clean');
+  assert(found[0].text === figs[0].inner_text, 'the text is exactly the PDF text layer of the figure');
+  assert(found[0].summary.length > 3, 'labelled');
+  // opened, it can be selected like any other text
+  const selectable = await r.page.evaluate(() => {
+    const d = document.querySelector('#book .fig details.figtext');
+    d.open = true;
+    const body = d.querySelector('.figtext-body');
+    return getComputedStyle(body).userSelect !== 'none';
+  });
+  assert(selectable, 'figure text is selectable');
+  await r.close();
+});
+
 await check('tapping a citation shows the reference and can jump to it', async () => {
   const r = await openReader(browser, bundle);
   await r.page.evaluate(() => document.querySelector('a.cite').click());

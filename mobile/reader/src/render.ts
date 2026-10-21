@@ -73,6 +73,12 @@ function caption(ctx: RenderCtx, id: string | null): HTMLElement | null {
   return cap ? el('figcaption', null, { 'data-cap': cap.id }, textBox(cap)) : null;
 }
 
+/** The PDF's own text inside a figure or table: collapsed, selectable, so no character lives only in a picture. */
+function innerText(b: Block, ctx: RenderCtx, label: string): HTMLElement | null {
+  if (!b.inner_text) return null;
+  return el('details', 'figtext', null, el('summary', null, null, label), el('pre', 'figtext-body', null, b.inner_text));
+}
+
 function renderTable(b: Block, ctx: RenderCtx): HTMLElement {
   const fig = base(b, 'figure', 'tbl');
   const cap = caption(ctx, b.caption_id);
@@ -101,6 +107,9 @@ function renderTable(b: Block, ctx: RenderCtx): HTMLElement {
   } else if (b.asset) {
     fig.append(imgWrap(b.asset, ctx.strings));
     if (uncertain) fig.append(el('div', 'chip', null, ctx.strings.table_uncertain));
+    // an image-only table keeps its text reachable
+    const text = innerText(b, ctx, ctx.strings.table_text);
+    if (text) fig.append(text);
   }
   return decorate(fig, b, ctx);
 }
@@ -138,6 +147,8 @@ export function renderBlock(b: Block, ctx: RenderCtx): HTMLElement | null {
     case 'figure': {
       const fig = base(b, 'figure', 'fig');
       if (b.asset) fig.append(imgWrap(b.asset, ctx.strings));
+      const text = innerText(b, ctx, ctx.strings.figure_text);
+      if (text) fig.append(text);
       const cap = caption(ctx, b.caption_id);
       if (cap) fig.append(cap);
       return decorate(fig, b, ctx);

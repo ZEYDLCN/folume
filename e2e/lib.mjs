@@ -13,6 +13,7 @@ export const STRINGS = {
   citation: 'Atıf', go_to_reference: 'Kaynakçaya git', conversion_warning: 'Dönüşüm uyarısı', conversion_note: 'Dönüşüm notu',
   bookmark: 'Yer imi', close: 'Kapat', equation: 'Denklem', figure: 'Şekil', loading: 'Yükleniyor…',
   empty_unsupported: 'Bu PDF taranmış görünüyor.', footnote: 'Dipnot', original_pages: 'Orijinal sayfalar',
+  figure_text: 'Şekil içindeki yazı', table_text: 'Tablo metni',
 };
 
 export const SETTINGS = {

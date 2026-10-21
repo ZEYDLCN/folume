@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { completenessVerdict } from '@/core/completeness';
 import { titleOf } from '@/core/docModel';
 import type { Document } from '@/core/types';
 import type { StringKey } from '@/i18n';
@@ -41,6 +42,16 @@ export default function ReportScreen() {
     ['report.ledger.omitted', l.omitted],
     ['report.ledger.unaccounted', l.unaccounted],
   ];
+  const verdict = completenessVerdict(doc);
+  const comp = q.completeness;
+  const verdictText =
+    verdict.kind === 'complete'
+      ? t('report.complete.complete', { n: fmt(verdict.letters) })
+      : verdict.kind === 'recovered'
+        ? t('report.complete.recovered', { n: fmt(verdict.letters), r: fmt(verdict.recovered) })
+        : verdict.kind === 'incomplete'
+          ? t('report.complete.incomplete', { missing: fmt(verdict.missing), extra: fmt(verdict.extra) })
+          : t('report.complete.unavailable');
   const countKeys = ['heading', 'paragraph', 'figure', 'table', 'equation', 'reference'] as const;
 
   return (
@@ -66,6 +77,22 @@ export default function ReportScreen() {
           <AppText>{t(`report.summary.${q.grade}` as StringKey)}</AppText>
           <AppText variant="caption" muted>
             {t('report.parser')}: {doc.parser.name} {doc.parser.version}
+          </AppText>
+        </Card>
+
+        <Card style={{ gap: space.sm, borderLeftWidth: 5, borderLeftColor: verdict.kind === 'complete' ? c.ok : verdict.kind === 'recovered' ? c.warn : c.danger }} testID="completeness">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <Badge label={verdict.kind === 'complete' ? '✓' : verdict.kind === 'recovered' ? '!' : '✕'} tone={verdict.kind === 'complete' ? 'ok' : verdict.kind === 'recovered' ? 'warn' : 'danger'} />
+            <AppText variant="heading">{t('report.complete')}</AppText>
+          </View>
+          <AppText>{verdictText}</AppText>
+          {comp && verdict.kind !== 'unavailable' ? (
+            <AppText variant="caption" muted>
+              {t('report.complete.parts', { text: fmt(comp.in_text), eq: fmt(comp.in_equations), tab: fmt(comp.in_tables), fig: fmt(comp.in_figures), om: fmt(comp.omitted) })}
+            </AppText>
+          ) : null}
+          <AppText variant="caption" muted>
+            {t('report.complete.how')}
           </AppText>
         </Card>
 

@@ -139,6 +139,9 @@ await check('conversion report explains the ledger and what was left out', async
   await page.getByTestId('open-report').click();
   await page.getByTestId('report').waitFor();
   await page.getByText('İyi').first().waitFor();
+  const complete = await page.getByTestId('completeness').textContent();
+  assert(/tamamı bu belgede/.test(complete) && /eksik hiçbiri yok|hiçbiri eksik/.test(complete), `completeness card: ${complete}`);
+  assert(/\d[\d.,]* harf/.test(complete), 'it says how many letters were compared');
   assert(await page.getByText('Metin defteri').count() === 1, 'ledger section');
   assert(await page.getByText('Hesaplanamayan').count() === 1, 'unaccounted row');
   assert(await page.getByText('Sayfa üst bilgisi').count() >= 1, 'omitted header listed');

@@ -70,6 +70,7 @@ body.t-dark .tint,body.t-black .tint{filter:invert(1)}
 .flagdot{position:absolute;right:0;top:-.15em;width:22px;height:22px;border-radius:50%;border:0;background:var(--warn);color:#fff;
   font:700 12px/22px var(--sans);text-align:center;padding:0}
 .flagdot.info{background:var(--muted)}
+.figtext{margin:.35em 0 .2em;font:12px var(--sans);color:var(--muted)}.figtext summary{cursor:pointer;padding:.2em 0}.figtext-body{white-space:pre-wrap;margin:.3em 0;font:12px/1.45 var(--sans);color:var(--text);user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
 .chip{display:inline-block;font:11px/1.2 var(--sans);color:var(--warn);background:var(--warnbg);border-radius:999px;padding:3px 8px;margin-top:6px}
 .unsupported{margin:3em 0;padding:18px;border-radius:12px;background:var(--warnbg);color:var(--warn);font:15px/1.5 var(--sans)}
 #orig{display:none;padding:6px 0 40px}

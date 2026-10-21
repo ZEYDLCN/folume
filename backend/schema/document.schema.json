@@ -131,6 +131,19 @@
           "title": "Id",
           "type": "string"
         },
+        "inner_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text layer inside a figure or table (labels, axis ticks, cells), top to bottom; the image shows it, this keeps it selectable and searchable so no character of the PDF is lost",
+          "title": "Inner Text"
+        },
         "latex": {
           "anyOf": [
             {
@@ -169,6 +182,19 @@
           "default": null,
           "description": "Heading number, list marker, equation number or caption label",
           "title": "Number"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text the PDF showed in front of this block that was moved out of `text`: a heading number, a reference label, a footnote marker, a run-in 'Abstract\u2014'. `prefix + text` is what the PDF said.",
+          "title": "Prefix"
         },
         "reference": {
           "anyOf": [
@@ -260,14 +286,154 @@
         "caption_id",
         "caption_for",
         "reference",
-        "latex"
+        "latex",
+        "prefix",
+        "inner_text"
       ],
       "title": "Block",
+      "type": "object"
+    },
+    "Completeness": {
+      "additionalProperties": false,
+      "description": "Letter-by-letter comparison of the PDF text layer with the converted document.\n\nCounts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).\n`complete` is true when nothing is missing and nothing was invented.",
+      "properties": {
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "duplicates": {
+          "description": "Overprinted copies of the same glyph (fake bold): one copy is read",
+          "title": "Duplicates",
+          "type": "integer"
+        },
+        "extra": {
+          "title": "Extra",
+          "type": "integer"
+        },
+        "hidden": {
+          "description": "Invisible text smaller than half a point",
+          "title": "Hidden",
+          "type": "integer"
+        },
+        "in_equations": {
+          "title": "In Equations",
+          "type": "integer"
+        },
+        "in_figures": {
+          "title": "In Figures",
+          "type": "integer"
+        },
+        "in_tables": {
+          "title": "In Tables",
+          "type": "integer"
+        },
+        "in_text": {
+          "description": "Letters in reading text: paragraphs, headings, lists, captions, references, ...",
+          "title": "In Text",
+          "type": "integer"
+        },
+        "letters_in_pdf": {
+          "title": "Letters In Pdf",
+          "type": "integer"
+        },
+        "missing": {
+          "title": "Missing",
+          "type": "integer"
+        },
+        "omitted": {
+          "description": "Running headers/footers, page numbers, stamps: kept out of the flow but listed in full",
+          "title": "Omitted",
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/CompletenessProblem"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "recovered": {
+          "description": "Letters the layout analysis could not place; shown in flagged blocks",
+          "title": "Recovered",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "complete",
+        "letters_in_pdf",
+        "in_text",
+        "in_equations",
+        "in_tables",
+        "in_figures",
+        "omitted",
+        "duplicates",
+        "hidden",
+        "recovered",
+        "missing",
+        "extra",
+        "problems"
+      ],
+      "title": "Completeness",
+      "type": "object"
+    },
+    "CompletenessProblem": {
+      "additionalProperties": false,
+      "description": "Where letters were lost or invented: the block (or just the page) and the letters concerned.",
+      "properties": {
+        "block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "extra": {
+          "default": "",
+          "description": "Letters/digits in the block that the PDF does not have (shortened)",
+          "title": "Extra",
+          "type": "string"
+        },
+        "missing": {
+          "default": "",
+          "description": "Letters/digits of the PDF text that are not in the block (shortened)",
+          "title": "Missing",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "page",
+        "missing",
+        "extra"
+      ],
+      "title": "CompletenessProblem",
       "type": "object"
     },
     "DocumentQuality": {
       "additionalProperties": false,
       "properties": {
+        "completeness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Completeness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null only for documents without a text layer (nothing to compare)"
+        },
         "counts": {
           "additionalProperties": {
             "type": "integer"
@@ -323,7 +489,8 @@
         "pages",
         "omitted",
         "issues",
-        "counts"
+        "counts",
+        "completeness"
       ],
       "title": "DocumentQuality",
       "type": "object"
@@ -479,6 +646,12 @@
           ],
           "title": "Reason",
           "type": "string"
+        },
+        "text": {
+          "default": "",
+          "description": "The complete omitted text (`preview` is its start)",
+          "title": "Text",
+          "type": "string"
         }
       },
       "required": [
@@ -486,7 +659,8 @@
         "bbox",
         "reason",
         "char_count",
-        "preview"
+        "preview",
+        "text"
       ],
       "title": "OmittedRegion",
       "type": "object"
@@ -618,7 +792,8 @@
             "reference_unparsed",
             "no_text_layer",
             "low_text_coverage",
-            "rotated_text_skipped"
+            "rotated_text_skipped",
+            "text_recovered"
           ],
           "title": "Code",
           "type": "string"
