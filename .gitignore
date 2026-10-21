@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# Node / Expo
+node_modules/
+.expo/
+dist/
+web-build/
+*.tsbuildinfo
+npm-debug.log*
+
+# Local data and artifacts
+.env
+.env.*
+!.env.example
+*.log
+.DS_Store
+backend/var/
+backend/evals/out/
+backend/tests/.generated/
+e2e/out/
+
+# Real papers used for local evaluation are never committed
+backend/evals/corpus-local/

@@ -1,0 +1,1339 @@
+{
+  "$defs": {
+    "Asset": {
+      "additionalProperties": false,
+      "properties": {
+        "bbox": {
+          "description": "Region of the page this image shows",
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "height": {
+          "description": "Image height in pixels",
+          "exclusiveMinimum": 0,
+          "title": "Height",
+          "type": "integer"
+        },
+        "kind": {
+          "enum": [
+            "figure",
+            "table",
+            "equation"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        },
+        "path": {
+          "description": "Path relative to the document root, e.g. figures/f0003.png",
+          "title": "Path",
+          "type": "string"
+        },
+        "transparent": {
+          "default": false,
+          "description": "True for single-colour glyph images that can be tinted",
+          "title": "Transparent",
+          "type": "boolean"
+        },
+        "width": {
+          "description": "Image width in pixels",
+          "exclusiveMinimum": 0,
+          "title": "Width",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "path",
+        "kind",
+        "page",
+        "bbox",
+        "width",
+        "height",
+        "transparent"
+      ],
+      "title": "Asset",
+      "type": "object"
+    },
+    "Block": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Asset"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "caption_for": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "caption -> its figure/table block",
+          "title": "Caption For"
+        },
+        "caption_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "figure/table -> its caption block",
+          "title": "Caption Id"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "flags": {
+          "items": {
+            "$ref": "#/$defs/QualityFlag"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "inner_text": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text layer inside a figure or table (labels, axis ticks, cells), top to bottom; the image shows it, this keeps it selectable and searchable so no character of the PDF is lost",
+          "title": "Inner Text"
+        },
+        "latex": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reserved; engines that can emit LaTeX fill it",
+          "title": "Latex"
+        },
+        "level": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Heading level (1 = top)",
+          "title": "Level"
+        },
+        "number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Heading number, list marker, equation number or caption label",
+          "title": "Number"
+        },
+        "prefix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Text the PDF showed in front of this block that was moved out of `text`: a heading number, a reference label, a footnote marker, a run-in 'Abstract\u2014'. `prefix + text` is what the PDF said.",
+          "title": "Prefix"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReferenceInfo"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "section_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section Id"
+        },
+        "source": {
+          "items": {
+            "$ref": "#/$defs/SourceRegion"
+          },
+          "minItems": 1,
+          "title": "Source",
+          "type": "array"
+        },
+        "spans": {
+          "items": {
+            "$ref": "#/$defs/Span"
+          },
+          "title": "Spans",
+          "type": "array"
+        },
+        "table": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TableData"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "text": {
+          "default": "",
+          "description": "Plain text; for figures/tables the caption is a separate block",
+          "title": "Text",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "title",
+            "authors",
+            "heading",
+            "paragraph",
+            "list_item",
+            "figure",
+            "table",
+            "equation",
+            "caption",
+            "footnote",
+            "reference",
+            "code"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "text",
+        "spans",
+        "level",
+        "number",
+        "section_id",
+        "source",
+        "confidence",
+        "flags",
+        "asset",
+        "table",
+        "caption_id",
+        "caption_for",
+        "reference",
+        "latex",
+        "prefix",
+        "inner_text"
+      ],
+      "title": "Block",
+      "type": "object"
+    },
+    "Completeness": {
+      "additionalProperties": false,
+      "description": "Letter-by-letter comparison of the PDF text layer with the converted document.\n\nCounts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).\n`complete` is true when nothing is missing and nothing was invented.",
+      "properties": {
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "duplicates": {
+          "description": "Overprinted copies of the same glyph (fake bold): one copy is read",
+          "title": "Duplicates",
+          "type": "integer"
+        },
+        "extra": {
+          "title": "Extra",
+          "type": "integer"
+        },
+        "hidden": {
+          "description": "Invisible text smaller than half a point",
+          "title": "Hidden",
+          "type": "integer"
+        },
+        "in_equations": {
+          "title": "In Equations",
+          "type": "integer"
+        },
+        "in_figures": {
+          "title": "In Figures",
+          "type": "integer"
+        },
+        "in_tables": {
+          "title": "In Tables",
+          "type": "integer"
+        },
+        "in_text": {
+          "description": "Letters in reading text: paragraphs, headings, lists, captions, references, ...",
+          "title": "In Text",
+          "type": "integer"
+        },
+        "letters_in_pdf": {
+          "title": "Letters In Pdf",
+          "type": "integer"
+        },
+        "missing": {
+          "title": "Missing",
+          "type": "integer"
+        },
+        "omitted": {
+          "description": "Running headers/footers, page numbers, stamps: kept out of the flow but listed in full",
+          "title": "Omitted",
+          "type": "integer"
+        },
+        "problems": {
+          "items": {
+            "$ref": "#/$defs/CompletenessProblem"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "recovered": {
+          "description": "Letters the layout analysis could not place; shown in flagged blocks",
+          "title": "Recovered",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "complete",
+        "letters_in_pdf",
+        "in_text",
+        "in_equations",
+        "in_tables",
+        "in_figures",
+        "omitted",
+        "duplicates",
+        "hidden",
+        "recovered",
+        "missing",
+        "extra",
+        "problems"
+      ],
+      "title": "Completeness",
+      "type": "object"
+    },
+    "CompletenessProblem": {
+      "additionalProperties": false,
+      "description": "Where letters were lost or invented: the block (or just the page) and the letters concerned.",
+      "properties": {
+        "block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "extra": {
+          "default": "",
+          "description": "Letters/digits in the block that the PDF does not have (shortened)",
+          "title": "Extra",
+          "type": "string"
+        },
+        "missing": {
+          "default": "",
+          "description": "Letters/digits of the PDF text that are not in the block (shortened)",
+          "title": "Missing",
+          "type": "string"
+        },
+        "page": {
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "block_id",
+        "page",
+        "missing",
+        "extra"
+      ],
+      "title": "CompletenessProblem",
+      "type": "object"
+    },
+    "DocumentQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "completeness": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Completeness"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Null only for documents without a text layer (nothing to compare)"
+        },
+        "counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Counts",
+          "type": "object"
+        },
+        "grade": {
+          "enum": [
+            "good",
+            "fair",
+            "poor",
+            "unsupported"
+          ],
+          "title": "Grade",
+          "type": "string"
+        },
+        "issues": {
+          "items": {
+            "$ref": "#/$defs/QualityIssue"
+          },
+          "title": "Issues",
+          "type": "array"
+        },
+        "ledger": {
+          "$ref": "#/$defs/TextLedger"
+        },
+        "omitted": {
+          "items": {
+            "$ref": "#/$defs/OmittedRegion"
+          },
+          "title": "Omitted",
+          "type": "array"
+        },
+        "pages": {
+          "items": {
+            "$ref": "#/$defs/PageQuality"
+          },
+          "title": "Pages",
+          "type": "array"
+        },
+        "score": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "score",
+        "grade",
+        "ledger",
+        "pages",
+        "omitted",
+        "issues",
+        "counts",
+        "completeness"
+      ],
+      "title": "DocumentQuality",
+      "type": "object"
+    },
+    "Metadata": {
+      "additionalProperties": false,
+      "properties": {
+        "abstract": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Abstract"
+        },
+        "arxiv_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Arxiv Id"
+        },
+        "authors": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Authors",
+          "type": "array"
+        },
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "keywords": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
+        },
+        "language": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "ISO 639-1 guess, e.g. en",
+          "title": "Language"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        }
+      },
+      "required": [
+        "title",
+        "authors",
+        "abstract",
+        "doi",
+        "arxiv_id",
+        "year",
+        "keywords",
+        "language"
+      ],
+      "title": "Metadata",
+      "type": "object"
+    },
+    "OmittedRegion": {
+      "additionalProperties": false,
+      "description": "Text deliberately kept out of the reading flow, listed so nothing disappears silently.",
+      "properties": {
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "char_count": {
+          "title": "Char Count",
+          "type": "integer"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        },
+        "preview": {
+          "title": "Preview",
+          "type": "string"
+        },
+        "reason": {
+          "enum": [
+            "running_header",
+            "running_footer",
+            "page_number",
+            "rotated_text",
+            "outside_page",
+            "unclassified"
+          ],
+          "title": "Reason",
+          "type": "string"
+        },
+        "text": {
+          "default": "",
+          "description": "The complete omitted text (`preview` is its start)",
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "page",
+        "bbox",
+        "reason",
+        "char_count",
+        "preview",
+        "text"
+      ],
+      "title": "OmittedRegion",
+      "type": "object"
+    },
+    "PageInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "height": {
+          "title": "Height",
+          "type": "number"
+        },
+        "image": {
+          "description": "Rendered page image, relative path",
+          "title": "Image",
+          "type": "string"
+        },
+        "image_height": {
+          "title": "Image Height",
+          "type": "integer"
+        },
+        "image_width": {
+          "title": "Image Width",
+          "type": "integer"
+        },
+        "number": {
+          "minimum": 1,
+          "title": "Number",
+          "type": "integer"
+        },
+        "width": {
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "required": [
+        "number",
+        "width",
+        "height",
+        "image",
+        "image_width",
+        "image_height"
+      ],
+      "title": "PageInfo",
+      "type": "object"
+    },
+    "PageQuality": {
+      "additionalProperties": false,
+      "properties": {
+        "char_count": {
+          "title": "Char Count",
+          "type": "integer"
+        },
+        "confidence": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "layout": {
+          "enum": [
+            "single_column",
+            "two_column",
+            "unknown"
+          ],
+          "title": "Layout",
+          "type": "string"
+        },
+        "notes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "page": {
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "layout",
+        "confidence",
+        "char_count",
+        "notes"
+      ],
+      "title": "PageQuality",
+      "type": "object"
+    },
+    "ParserInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "description": "UTC ISO-8601 timestamp",
+          "title": "Created At",
+          "type": "string"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "version": {
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "version",
+        "created_at"
+      ],
+      "title": "ParserInfo",
+      "type": "object"
+    },
+    "QualityFlag": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "enum": [
+            "formula_image_only",
+            "inline_math_approximate",
+            "table_structure_uncertain",
+            "table_image_only",
+            "figure_text_folded",
+            "text_garbled",
+            "reading_order_uncertain",
+            "heading_uncertain",
+            "caption_unlinked",
+            "reference_unparsed",
+            "no_text_layer",
+            "low_text_coverage",
+            "rotated_text_skipped",
+            "text_recovered"
+          ],
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "description": "Short English fallback; the UI localizes from `code`",
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warning",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "QualityFlag",
+      "type": "object"
+    },
+    "QualityIssue": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Block Id"
+        },
+        "flag": {
+          "$ref": "#/$defs/QualityFlag"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        }
+      },
+      "required": [
+        "page",
+        "block_id",
+        "flag"
+      ],
+      "title": "QualityIssue",
+      "type": "object"
+    },
+    "ReferenceInfo": {
+      "additionalProperties": false,
+      "description": "Best-effort bibliographic fields parsed from a reference entry.",
+      "properties": {
+        "doi": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Doi"
+        },
+        "first_author": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "First Author"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Label"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Url"
+        },
+        "year": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Year"
+        }
+      },
+      "required": [
+        "label",
+        "first_author",
+        "year",
+        "title",
+        "doi",
+        "url"
+      ],
+      "title": "ReferenceInfo",
+      "type": "object"
+    },
+    "Section": {
+      "additionalProperties": false,
+      "properties": {
+        "block_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Heading block of this section",
+          "title": "Block Id"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "body",
+          "enum": [
+            "front",
+            "abstract",
+            "body",
+            "acknowledgments",
+            "references",
+            "appendix"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "level": {
+          "minimum": 1,
+          "title": "Level",
+          "type": "integer"
+        },
+        "number": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Number"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent Id"
+        },
+        "start_page": {
+          "minimum": 1,
+          "title": "Start Page",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "number",
+        "level",
+        "kind",
+        "block_id",
+        "parent_id",
+        "start_page"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "SourceInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "filename": {
+          "title": "Filename",
+          "type": "string"
+        },
+        "page_count": {
+          "title": "Page Count",
+          "type": "integer"
+        },
+        "producer": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Producer"
+        },
+        "sha256": {
+          "title": "Sha256",
+          "type": "string"
+        },
+        "size_bytes": {
+          "title": "Size Bytes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "filename",
+        "sha256",
+        "size_bytes",
+        "page_count",
+        "producer"
+      ],
+      "title": "SourceInfo",
+      "type": "object"
+    },
+    "SourceRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "bbox": {
+          "maxItems": 4,
+          "minItems": 4,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Bbox",
+          "type": "array"
+        },
+        "page": {
+          "description": "1-based page number",
+          "minimum": 1,
+          "title": "Page",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "page",
+        "bbox"
+      ],
+      "title": "SourceRegion",
+      "type": "object"
+    },
+    "Span": {
+      "additionalProperties": false,
+      "description": "Inline run of text inside a block.",
+      "properties": {
+        "bold": {
+          "default": false,
+          "title": "Bold",
+          "type": "boolean"
+        },
+        "cite": {
+          "description": "Reference block ids this span cites",
+          "items": {
+            "type": "string"
+          },
+          "title": "Cite",
+          "type": "array"
+        },
+        "italic": {
+          "default": false,
+          "title": "Italic",
+          "type": "boolean"
+        },
+        "link": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Link"
+        },
+        "math": {
+          "default": false,
+          "title": "Math",
+          "type": "boolean"
+        },
+        "mono": {
+          "default": false,
+          "title": "Mono",
+          "type": "boolean"
+        },
+        "sub": {
+          "default": false,
+          "title": "Sub",
+          "type": "boolean"
+        },
+        "sup": {
+          "default": false,
+          "title": "Sup",
+          "type": "boolean"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "bold",
+        "italic",
+        "sup",
+        "sub",
+        "mono",
+        "math",
+        "cite",
+        "link"
+      ],
+      "title": "Span",
+      "type": "object"
+    },
+    "TableData": {
+      "additionalProperties": false,
+      "properties": {
+        "header_rows": {
+          "default": 0,
+          "title": "Header Rows",
+          "type": "integer"
+        },
+        "rows": {
+          "items": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "title": "Rows",
+          "type": "array"
+        }
+      },
+      "required": [
+        "rows",
+        "header_rows"
+      ],
+      "title": "TableData",
+      "type": "object"
+    },
+    "TextLedger": {
+      "additionalProperties": false,
+      "description": "Accounting of every character of the PDF text layer.",
+      "properties": {
+        "coverage": {
+          "description": "(total - unaccounted) / total",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Coverage",
+          "type": "number"
+        },
+        "in_blocks": {
+          "title": "In Blocks",
+          "type": "integer"
+        },
+        "in_figures": {
+          "description": "Characters folded into figure images",
+          "title": "In Figures",
+          "type": "integer"
+        },
+        "in_tables": {
+          "description": "Characters folded into table images/cells",
+          "title": "In Tables",
+          "type": "integer"
+        },
+        "omitted": {
+          "description": "Characters listed in `omitted` regions",
+          "title": "Omitted",
+          "type": "integer"
+        },
+        "total_chars": {
+          "title": "Total Chars",
+          "type": "integer"
+        },
+        "unaccounted": {
+          "title": "Unaccounted",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "total_chars",
+        "in_blocks",
+        "in_figures",
+        "in_tables",
+        "omitted",
+        "unaccounted",
+        "coverage"
+      ],
+      "title": "TextLedger",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "blocks": {
+      "items": {
+        "$ref": "#/$defs/Block"
+      },
+      "title": "Blocks",
+      "type": "array"
+    },
+    "body_font_size": {
+      "default": 10.0,
+      "description": "Dominant body text size in PDF points; lets readers scale math images",
+      "exclusiveMinimum": 0,
+      "title": "Body Font Size",
+      "type": "number"
+    },
+    "id": {
+      "description": "First 16 hex chars of the PDF sha256",
+      "title": "Id",
+      "type": "string"
+    },
+    "image_scale": {
+      "description": "Page image pixels per PDF point",
+      "title": "Image Scale",
+      "type": "number"
+    },
+    "metadata": {
+      "$ref": "#/$defs/Metadata"
+    },
+    "pages": {
+      "items": {
+        "$ref": "#/$defs/PageInfo"
+      },
+      "title": "Pages",
+      "type": "array"
+    },
+    "parser": {
+      "$ref": "#/$defs/ParserInfo"
+    },
+    "quality": {
+      "$ref": "#/$defs/DocumentQuality"
+    },
+    "schema_version": {
+      "default": 1,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sections": {
+      "items": {
+        "$ref": "#/$defs/Section"
+      },
+      "title": "Sections",
+      "type": "array"
+    },
+    "source": {
+      "$ref": "#/$defs/SourceInfo"
+    }
+  },
+  "required": [
+    "schema_version",
+    "id",
+    "source",
+    "parser",
+    "metadata",
+    "pages",
+    "sections",
+    "blocks",
+    "quality",
+    "image_scale",
+    "body_font_size"
+  ],
+  "title": "Document",
+  "type": "object"
+}
