@@ -96,6 +96,7 @@ export default function SettingsScreen() {
           <Field label={t('settings.server.url')}>
             <TextInput
               testID="server-url"
+              accessibilityLabel={t('settings.server.url')}
               value={url}
               onChangeText={setUrl}
               onBlur={() => void s.update({ serverUrl: url.trim() })}
@@ -109,6 +110,7 @@ export default function SettingsScreen() {
           <Field label={t('settings.server.key')}>
             <TextInput
               testID="server-key"
+              accessibilityLabel={t('settings.server.key')}
               value={key}
               onChangeText={setKey}
               onBlur={() => void s.update({ apiKey: key.trim() })}
@@ -233,6 +235,7 @@ export default function SettingsScreen() {
               <Field label={t('sync.key')} hint={t('sync.key.hint')}>
                 <TextInput
                   testID="sync-key"
+                  accessibilityLabel={t('sync.key')}
                   value={syncKey}
                   onChangeText={setSyncKey}
                   onBlur={() => void s.update({ syncKey: syncKey.trim() })}

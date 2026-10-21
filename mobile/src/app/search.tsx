@@ -72,6 +72,7 @@ export default function SearchScreen() {
         <IconButton icon="chevron-back" label={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} testID="screen-back" />
         <TextInput
           testID="search-input"
+          accessibilityLabel={t('search.placeholder')}
           autoFocus
           value={query}
           onChangeText={setQuery}

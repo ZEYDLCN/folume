@@ -106,6 +106,7 @@ export default function LibraryScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
+            accessibilityLabel={t('library.search')}
             placeholder={t('library.search')}
             placeholderTextColor={c.muted}
             style={{

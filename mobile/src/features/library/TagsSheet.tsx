@@ -64,6 +64,7 @@ export function TagsSheet({
         <View style={{ flexDirection: 'row', gap: space.sm }}>
           <TextInput
             testID="tag-input"
+            accessibilityLabel={t('tags.placeholder')}
             value={text}
             onChangeText={setText}
             onSubmitEditing={() => add(text)}

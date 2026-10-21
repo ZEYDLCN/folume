@@ -54,6 +54,7 @@ export function NoteSheet({
       ) : null}
       <TextInput
         testID="note-input"
+        accessibilityLabel={t('note.placeholder')}
         value={note}
         onChangeText={setNote}
         placeholder={t('note.placeholder')}

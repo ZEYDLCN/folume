@@ -238,6 +238,7 @@ export default function QuizScreen() {
                 : (
                   <TextInput
                     testID="quiz-short"
+                    accessibilityLabel={q.prompt}
                     value={typed}
                     onChangeText={setTyped}
                     multiline

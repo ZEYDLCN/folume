@@ -237,6 +237,7 @@ export function LearnSheet({
             <View style={{ gap: space.sm }}>
               <TextInput
                 testID="ask-input"
+                accessibilityLabel={t('learn.ask.placeholder')}
                 value={question}
                 onChangeText={setQuestion}
                 placeholder={t('learn.ask.placeholder')}
