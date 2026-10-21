@@ -31,7 +31,7 @@ def capabilities(request: Request) -> dict:
         "limits": {"max_upload_mb": s.max_upload_mb, "max_pages": s.max_pages},
         "retention_seconds": s.job_ttl_seconds,
         "uploads_persisted": False,
-        "ai": {"enabled": bool(s.llm_base_url and s.llm_model), "vision": s.llm_vision},
+        "ai": {"enabled": request.app.state.ai.status().enabled, "vision": request.app.state.ai.status().vision},
         "sync": {"enabled": s.sync_enabled},
     }
 

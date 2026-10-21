@@ -30,6 +30,7 @@ class Settings:
     llm_model: str | None = None
     llm_vision: bool = False
     llm_timeout_seconds: float = 60.0
+    ai_rate_limit_per_minute: int = 40
     # optional multi-device sync
     sync_enabled: bool = False
     sync_db: Path = field(default_factory=lambda: Path("var") / "sync.sqlite3")
@@ -52,6 +53,7 @@ class Settings:
             llm_model=e.get("FOLUME_LLM_MODEL") or None,
             llm_vision=_bool(e.get("FOLUME_LLM_VISION")),
             llm_timeout_seconds=float(e.get("FOLUME_LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds)),
+            ai_rate_limit_per_minute=int(e.get("FOLUME_AI_RATE_LIMIT", defaults.ai_rate_limit_per_minute)),
             sync_enabled=_bool(e.get("FOLUME_SYNC_ENABLED")),
             sync_db=Path(e.get("FOLUME_SYNC_DB", str(defaults.sync_db))),
         )
