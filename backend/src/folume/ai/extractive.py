@@ -79,10 +79,10 @@ def quiz_extractive(req: QuizRequest) -> list[Question]:
         rng.shuffle(distractors)
         if len(distractors) < 3:
             continue
-        match = re.search(re.escape(term), sentence, re.I)
-        if match is None:
+        # blank every occurrence, otherwise a repeated term gives the answer away
+        blank, n = re.subn(re.escape(term), "_____", sentence, flags=re.I)
+        if n == 0:
             continue
-        blank = sentence[: match.start()] + "_____" + sentence[match.end():]
         choices = [term, *distractors[:3]]
         rng.shuffle(choices)
         used_terms.add(term)

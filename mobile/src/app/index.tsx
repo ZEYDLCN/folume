@@ -75,6 +75,7 @@ export default function LibraryScreen() {
           <View style={{ flex: 1 }}>
             <AppText variant="title">{t('library.title')}</AppText>
           </View>
+          <IconButton icon="create-outline" label={t('notes.title')} onPress={() => router.push('/notes')} testID="open-notes" />
           <IconButton icon="settings-outline" label={t('settings.title')} onPress={() => router.push('/settings')} testID="open-settings" />
         </View>
 

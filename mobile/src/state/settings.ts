@@ -9,12 +9,34 @@ import { DEFAULT_READER_SETTINGS, type ReaderSettings } from '@/reader/protocol'
 
 export type AppTheme = 'system' | 'light' | 'dark';
 
+export interface AiPrefs {
+  /** master switch; off by default: nothing is sent anywhere until the reader opts in */
+  enabled: boolean;
+  /** allow sending equation/figure images (still confirmed per request) */
+  shareImages: boolean;
+  /** show exactly which passages will be sent before every request */
+  confirmBeforeSend: boolean;
+  level: 'beginner' | 'intermediate' | 'expert';
+  answerLanguage: 'auto' | 'tr' | 'en' | 'de' | 'fr' | 'es';
+  translateTo: 'tr' | 'en' | 'de' | 'fr' | 'es';
+}
+
+export const DEFAULT_AI_PREFS: AiPrefs = {
+  enabled: false,
+  shareImages: false,
+  confirmBeforeSend: true,
+  level: 'intermediate',
+  answerLanguage: 'auto',
+  translateTo: 'tr',
+};
+
 export interface AppSettings {
   serverUrl: string;
   apiKey: string;
   locale: LocaleSetting;
   appTheme: AppTheme;
   reader: ReaderSettings;
+  ai: AiPrefs;
 }
 
 const defaultServerUrl = (): string =>
@@ -26,13 +48,15 @@ export const defaultSettings = (): AppSettings => ({
   locale: 'auto',
   appTheme: 'system',
   reader: DEFAULT_READER_SETTINGS,
+  ai: DEFAULT_AI_PREFS,
 });
 
 interface SettingsStore extends AppSettings {
   loaded: boolean;
   load: () => Promise<void>;
-  update: (patch: Partial<Omit<AppSettings, 'reader'>>) => Promise<void>;
+  update: (patch: Partial<Omit<AppSettings, 'reader' | 'ai'>>) => Promise<void>;
   updateReader: (patch: Partial<ReaderSettings>) => Promise<void>;
+  updateAi: (patch: Partial<AiPrefs>) => Promise<void>;
 }
 
 const kv = new AsyncStorageKV();
@@ -56,6 +80,7 @@ export const useSettings = create<SettingsStore>((set, get) => ({
       ...base,
       ...stored,
       reader: { ...base.reader, ...(stored?.reader ?? {}) },
+      ai: { ...base.ai, ...(stored?.ai ?? {}) },
       apiKey,
     };
     setLocale(merged.locale);
@@ -67,6 +92,11 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     set(patch);
     if (patch.apiKey !== undefined) await setSecret('apiKey', patch.apiKey || null);
     await persist(next);
+  },
+  async updateAi(patch) {
+    const ai = { ...get().ai, ...patch };
+    set({ ai });
+    await persist({ ...get(), ai });
   },
   async updateReader(patch) {
     const reader = { ...get().reader, ...patch };

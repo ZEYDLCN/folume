@@ -57,10 +57,7 @@ export interface Block {
   number: string | null;
   reference: ReferenceInfo | null;
   section_id: string | null;
-  /**
-   * @minItems 1
-   */
-  source: [SourceRegion, ...SourceRegion[]];
+  source: SourceRegion[];
   spans: Span[];
   table: TableData | null;
   /**

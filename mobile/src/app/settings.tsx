@@ -1,13 +1,13 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { ScrollView, Switch, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { LocaleSetting } from '@/i18n';
 import { getApi } from '@/services/container';
 import type { Capabilities } from '@/services/api';
-import { useSettings, type AppTheme } from '@/state/settings';
+import { useSettings, type AiPrefs, type AppTheme } from '@/state/settings';
 import { AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
@@ -117,6 +117,64 @@ export default function SettingsScreen() {
                 { value: 'system', label: t('settings.theme.system') },
                 { value: 'light', label: t('settings.theme.light') },
                 { value: 'dark', label: t('settings.theme.dark') },
+              ]}
+            />
+          </Field>
+        </Card>
+
+        <Card style={{ gap: space.md }} testID="ai-settings">
+          <AppText variant="heading">{t('settings.ai')}</AppText>
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <AppText style={{ flex: 1 }}>{t('settings.ai.enable')}</AppText>
+              <Switch value={s.ai.enabled} onValueChange={(enabled) => void s.updateAi({ enabled })} testID="switch-ai" />
+            </View>
+            <AppText variant="caption" muted>{t('settings.ai.enable.hint')}</AppText>
+          </View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+            <AppText style={{ flex: 1 }}>{t('settings.ai.confirm')}</AppText>
+            <Switch value={s.ai.confirmBeforeSend} onValueChange={(confirmBeforeSend) => void s.updateAi({ confirmBeforeSend })} testID="switch-confirm" />
+          </View>
+          <View style={{ gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
+              <AppText style={{ flex: 1 }}>{t('settings.ai.images')}</AppText>
+              <Switch value={s.ai.shareImages} onValueChange={(shareImages) => void s.updateAi({ shareImages })} testID="switch-images" />
+            </View>
+            <AppText variant="caption" muted>{t('settings.ai.images.hint')}</AppText>
+          </View>
+          <Field label={t('settings.ai.level')}>
+            <Segmented<AiPrefs['level']>
+              value={s.ai.level}
+              onChange={(level) => void s.updateAi({ level })}
+              options={[
+                { value: 'beginner', label: t('learn.level.beginner') },
+                { value: 'intermediate', label: t('learn.level.intermediate') },
+                { value: 'expert', label: t('learn.level.expert') },
+              ]}
+            />
+          </Field>
+          <Field label={t('settings.ai.language')}>
+            <Segmented<AiPrefs['answerLanguage']>
+              value={s.ai.answerLanguage}
+              onChange={(answerLanguage) => void s.updateAi({ answerLanguage })}
+              options={[
+                { value: 'auto', label: t('settings.language.auto') },
+                { value: 'tr', label: 'TR' },
+                { value: 'en', label: 'EN' },
+                { value: 'de', label: 'DE' },
+              ]}
+            />
+          </Field>
+          <Field label={t('settings.ai.translate')}>
+            <Segmented<AiPrefs['translateTo']>
+              value={s.ai.translateTo}
+              onChange={(translateTo) => void s.updateAi({ translateTo })}
+              options={[
+                { value: 'tr', label: 'TR' },
+                { value: 'en', label: 'EN' },
+                { value: 'de', label: 'DE' },
+                { value: 'fr', label: 'FR' },
+                { value: 'es', label: 'ES' },
               ]}
             />
           </Field>

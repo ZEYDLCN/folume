@@ -4,12 +4,16 @@ import pytest
 from pydantic import ValidationError
 
 from folume.model import Block, Document, SourceRegion
-from folume.tools.export_schema import DEFAULT_PATH, render
+from folume.tools.export_schema import AI_PATH, DEFAULT_PATH, render, render_ai
 
 
 def test_committed_schema_is_current():
     """The TypeScript types are generated from schema/document.schema.json; keep it in sync."""
     assert DEFAULT_PATH.read_text(encoding="utf-8") == render(), "run `make schema`"
+
+
+def test_committed_ai_schema_is_current():
+    assert AI_PATH.read_text(encoding="utf-8") == render_ai(), "run `make schema`"
 
 
 def test_block_requires_a_source_region():

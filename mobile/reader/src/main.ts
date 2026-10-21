@@ -424,6 +424,16 @@ function onBookClick(e: MouseEvent): void {
     if (img) img.style.display = asImage ? '' : 'none';
     return;
   }
+  const quiz = t.closest<HTMLElement>('[data-quiz]');
+  if (quiz) {
+    post({ type: 'quiz', sectionId: quiz.dataset.quiz as string });
+    return;
+  }
+  const hl = t.closest<HTMLElement>('mark.hl');
+  if (hl?.dataset.h) {
+    post({ type: 'highlight-tap', id: hl.dataset.h, rect: rectOf(hl) });
+    return;
+  }
   const zoom = t.closest<HTMLElement>('[data-zoom]');
   const zimg = zoom?.querySelector('img');
   if (zimg && zimg.src) {

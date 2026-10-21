@@ -1,0 +1,655 @@
+{
+  "$defs": {
+    "AiStatus": {
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "limits": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Limits",
+          "type": "object"
+        },
+        "mode": {
+          "enum": [
+            "llm",
+            "extractive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Model"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "vision": {
+          "title": "Vision",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled",
+        "mode",
+        "provider",
+        "model",
+        "vision",
+        "limits"
+      ],
+      "title": "AiStatus",
+      "type": "object"
+    },
+    "CompareRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "a": {
+          "items": {
+            "$ref": "#/$defs/Passage"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "A",
+          "type": "array"
+        },
+        "b": {
+          "items": {
+            "$ref": "#/$defs/Passage"
+          },
+          "maxItems": 6,
+          "minItems": 1,
+          "title": "B",
+          "type": "array"
+        },
+        "concept": {
+          "maxLength": 200,
+          "title": "Concept",
+          "type": "string"
+        },
+        "language": {
+          "default": "tr",
+          "pattern": "^[a-z]{2}$",
+          "title": "Language",
+          "type": "string"
+        },
+        "title_a": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Title A",
+          "type": "string"
+        },
+        "title_b": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Title B",
+          "type": "string"
+        }
+      },
+      "required": [
+        "concept",
+        "a",
+        "b"
+      ],
+      "title": "CompareRequest",
+      "type": "object"
+    },
+    "CompareResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "llm",
+            "extractive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notices",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "relation": {
+          "enum": [
+            "common",
+            "complementary",
+            "contradictory",
+            "unrelated",
+            "unknown"
+          ],
+          "title": "Relation",
+          "type": "string"
+        },
+        "summary": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "title": "Summary",
+          "type": "array"
+        }
+      },
+      "required": [
+        "relation",
+        "summary",
+        "mode",
+        "provider",
+        "notices"
+      ],
+      "title": "CompareResponse",
+      "type": "object"
+    },
+    "ExplainRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "images": {
+          "items": {
+            "$ref": "#/$defs/ImageRef"
+          },
+          "maxItems": 3,
+          "title": "Images",
+          "type": "array"
+        },
+        "language": {
+          "default": "tr",
+          "pattern": "^[a-z]{2}$",
+          "title": "Language",
+          "type": "string"
+        },
+        "level": {
+          "default": "intermediate",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "expert"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "paper": {
+          "$ref": "#/$defs/PaperInfo"
+        },
+        "passages": {
+          "items": {
+            "$ref": "#/$defs/Passage"
+          },
+          "maxItems": 14,
+          "minItems": 1,
+          "title": "Passages",
+          "type": "array"
+        },
+        "question": {
+          "anyOf": [
+            {
+              "maxLength": 600,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Question"
+        },
+        "selection_id": {
+          "description": "Which passage the reader selected",
+          "pattern": "^p\\d{1,3}$",
+          "title": "Selection Id",
+          "type": "string"
+        },
+        "target_language": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z]{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "for translate",
+          "title": "Target Language"
+        },
+        "task": {
+          "enum": [
+            "explain",
+            "why_matters",
+            "define_term",
+            "explain_formula",
+            "explain_figure",
+            "simplify",
+            "translate",
+            "ask"
+          ],
+          "title": "Task",
+          "type": "string"
+        }
+      },
+      "required": [
+        "task",
+        "passages",
+        "selection_id"
+      ],
+      "title": "ExplainRequest",
+      "type": "object"
+    },
+    "ExplainResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "items": {
+            "$ref": "#/$defs/Segment"
+          },
+          "title": "Answer",
+          "type": "array"
+        },
+        "mode": {
+          "enum": [
+            "llm",
+            "extractive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model"
+        },
+        "needs_more_context": {
+          "default": false,
+          "title": "Needs More Context",
+          "type": "boolean"
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notices",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "ungrounded_ratio": {
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Ungrounded Ratio",
+          "type": "number"
+        }
+      },
+      "required": [
+        "answer",
+        "mode",
+        "provider",
+        "model",
+        "ungrounded_ratio",
+        "needs_more_context",
+        "notices"
+      ],
+      "title": "ExplainResponse",
+      "type": "object"
+    },
+    "ImageRef": {
+      "additionalProperties": false,
+      "properties": {
+        "data_b64": {
+          "maxLength": 3500000,
+          "title": "Data B64",
+          "type": "string"
+        },
+        "mime": {
+          "enum": [
+            "image/png",
+            "image/jpeg"
+          ],
+          "title": "Mime",
+          "type": "string"
+        },
+        "passage_id": {
+          "pattern": "^p\\d{1,3}$",
+          "title": "Passage Id",
+          "type": "string"
+        },
+        "role": {
+          "enum": [
+            "figure",
+            "equation",
+            "table"
+          ],
+          "title": "Role",
+          "type": "string"
+        }
+      },
+      "required": [
+        "passage_id",
+        "mime",
+        "data_b64",
+        "role"
+      ],
+      "title": "ImageRef",
+      "type": "object"
+    },
+    "PaperInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "abstract": {
+          "anyOf": [
+            {
+              "maxLength": 3000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Abstract"
+        },
+        "title": {
+          "default": "",
+          "maxLength": 300,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "title": "PaperInfo",
+      "type": "object"
+    },
+    "Passage": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "description": "Short id the model cites, e.g. p3",
+          "pattern": "^p\\d{1,3}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "default": "context",
+          "enum": [
+            "selection",
+            "context",
+            "retrieved",
+            "caption",
+            "equation",
+            "abstract",
+            "section"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "label": {
+          "anyOf": [
+            {
+              "maxLength": 120,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. 'Section 3.1, p. 4'",
+          "title": "Label"
+        },
+        "text": {
+          "maxLength": 4000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "text"
+      ],
+      "title": "Passage",
+      "type": "object"
+    },
+    "Question": {
+      "additionalProperties": false,
+      "properties": {
+        "answer": {
+          "description": "For mcq/truefalse/cloze: the correct choice text; for short: a model answer",
+          "title": "Answer",
+          "type": "string"
+        },
+        "choices": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Choices",
+          "type": "array"
+        },
+        "cites": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Cites",
+          "type": "array"
+        },
+        "concept": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Concept"
+        },
+        "explanation": {
+          "default": "",
+          "title": "Explanation",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "prompt": {
+          "title": "Prompt",
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "mcq",
+            "truefalse",
+            "short",
+            "cloze"
+          ],
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "prompt",
+        "choices",
+        "answer",
+        "explanation",
+        "cites",
+        "concept"
+      ],
+      "title": "Question",
+      "type": "object"
+    },
+    "QuizRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "default": 4,
+          "maximum": 8,
+          "minimum": 1,
+          "title": "Count",
+          "type": "integer"
+        },
+        "language": {
+          "default": "tr",
+          "pattern": "^[a-z]{2}$",
+          "title": "Language",
+          "type": "string"
+        },
+        "level": {
+          "default": "intermediate",
+          "enum": [
+            "beginner",
+            "intermediate",
+            "expert"
+          ],
+          "title": "Level",
+          "type": "string"
+        },
+        "paper": {
+          "$ref": "#/$defs/PaperInfo"
+        },
+        "passages": {
+          "items": {
+            "$ref": "#/$defs/Passage"
+          },
+          "maxItems": 14,
+          "minItems": 1,
+          "title": "Passages",
+          "type": "array"
+        },
+        "section_title": {
+          "maxLength": 200,
+          "title": "Section Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "section_title",
+        "passages"
+      ],
+      "title": "QuizRequest",
+      "type": "object"
+    },
+    "QuizResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "llm",
+            "extractive"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "notices": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Notices",
+          "type": "array"
+        },
+        "provider": {
+          "title": "Provider",
+          "type": "string"
+        },
+        "questions": {
+          "items": {
+            "$ref": "#/$defs/Question"
+          },
+          "title": "Questions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "questions",
+        "mode",
+        "provider",
+        "notices"
+      ],
+      "title": "QuizResponse",
+      "type": "object"
+    },
+    "Segment": {
+      "additionalProperties": false,
+      "properties": {
+        "cites": {
+          "description": "Passage ids that support this segment",
+          "items": {
+            "type": "string"
+          },
+          "title": "Cites",
+          "type": "array"
+        },
+        "grounded": {
+          "description": "True when at least one valid citation backs the segment",
+          "title": "Grounded",
+          "type": "boolean"
+        },
+        "quote": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact text from a cited passage, if the model quoted",
+          "title": "Quote"
+        },
+        "quote_verified": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Quote Verified"
+        },
+        "text": {
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "text",
+        "cites",
+        "quote",
+        "grounded",
+        "quote_verified"
+      ],
+      "title": "Segment",
+      "type": "object"
+    }
+  }
+}

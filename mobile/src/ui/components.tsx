@@ -50,10 +50,12 @@ export function AppText({
   );
 }
 
-export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+export function Card({ children, style, testID }: { children: ReactNode; style?: StyleProp<ViewStyle>; testID?: string }) {
   const c = useColors();
   return (
-    <View style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }, style]}>{children}</View>
+    <View testID={testID} style={[styles.card, { backgroundColor: c.surface, borderColor: c.border }, style]}>
+      {children}
+    </View>
   );
 }
 

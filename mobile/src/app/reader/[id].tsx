@@ -6,9 +6,13 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { indexDocument, titleOf, type DocIndex } from '@/core/docModel';
 import type { Document } from '@/core/types';
 import type { DocState } from '@/data/library';
+import { HIGHLIGHT_COLORS, toHighlightViews, type Annotation } from '@/data/annotations';
+import { LearnSheet, type LearnTarget } from '@/features/learn/LearnSheet';
 import { BlockActions } from '@/features/reader/BlockActions';
 import { ContentsSheet } from '@/features/reader/ContentsSheet';
 import { FlagsSheet } from '@/features/reader/FlagsSheet';
+import { NoteSheet } from '@/features/reader/NoteSheet';
+import { SelectionBar } from '@/features/reader/SelectionBar';
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { ReaderEvent, ReaderMode } from '@/reader/protocol';
 import { ReaderView, type ReaderViewHandle } from '@/reader/ReaderView';
@@ -28,7 +32,8 @@ export default function ReaderScreen() {
   const t = useT();
   const c = useColors();
   useLocale();
-  const { library } = getStores();
+  const { library, annotations: annRepo } = getStores();
+  const aiOn = useSettings((s) => s.ai.enabled);
   const settings = useSettings((s) => s.reader);
   const updateReader = useSettings((s) => s.updateReader);
 
@@ -41,6 +46,12 @@ export default function ReaderScreen() {
   const [flagsFor, setFlagsFor] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [typoOpen, setTypoOpen] = useState(false);
+  const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [selection, setSelection] = useState<{ blockId: string; start: number; end: number; text: string } | null>(null);
+  const [color, setColor] = useState<string>(HIGHLIGHT_COLORS[0].value);
+  const [learn, setLearn] = useState<LearnTarget | null>(null);
+  const [learnOpen, setLearnOpen] = useState(false);
+  const [noteFor, setNoteFor] = useState<{ mode: 'new'; sel: { blockId: string; start: number; end: number; text: string } } | { mode: 'edit'; id: string } | null>(null);
   const reader = useRef<ReaderViewHandle>(null);
   const pending = useRef<Partial<DocState> | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -59,6 +70,7 @@ export default function ReaderScreen() {
       setMode(first(params.mode) ? requestedMode : s.mode);
       setPercent(s.percent);
       if (d) void library.markOpened(id);
+      setAnnotations(await annRepo.list(id));
     })();
     return () => {
       cancelled = true;
@@ -87,6 +99,19 @@ export default function ReaderScreen() {
 
   const bookmarks = state?.bookmarks ?? [];
   const bookmarkIds = useMemo(() => bookmarks.map((b) => b.blockId), [bookmarks]);
+  const highlights = useMemo(() => toHighlightViews(annotations), [annotations]);
+
+  const addAnnotation = async (sel: { blockId: string; start: number; end: number; text: string }, note: string, chosen: string) => {
+    const block = index?.byId.get(sel.blockId);
+    const a = await annRepo.add({
+      docId: id, blockId: sel.blockId, start: sel.start, end: sel.end, quote: sel.text.trim(), color: chosen, note,
+      page: block?.source[0].page ?? 1,
+    });
+    setAnnotations((list) => [...list, a]);
+    setSelection(null);
+    reader.current?.send({ type: 'clear-selection' });
+  };
+
 
   const toggleBookmark = (blockId: string) => {
     if (!state) return;
@@ -116,9 +141,21 @@ export default function ReaderScreen() {
           break;
         case 'block-tap':
           setActive(e.blockId);
+          setSelection(null);
+          break;
+        case 'selection':
+          setSelection({ blockId: e.blockId, start: e.start, end: e.end, text: e.text });
+          setActive(null);
           break;
         case 'selection-clear':
           setActive(null);
+          setSelection(null);
+          break;
+        case 'quiz':
+          router.push(`/quiz/${id}?section=${e.sectionId}`);
+          break;
+        case 'highlight-tap':
+          setNoteFor({ mode: 'edit', id: e.id });
           break;
         case 'flags':
           setFlagsFor(e.blockId);
@@ -135,7 +172,7 @@ export default function ReaderScreen() {
           break;
       }
     },
-    [save],
+    [save, router, id],
   );
 
   const strings = useMemo(() => readerStrings(), [useSettings((s) => s.locale)]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,7 +208,7 @@ export default function ReaderScreen() {
             {titleOf(doc)}
           </AppText>
           <AppText variant="caption" muted testID="reader-position">
-            {t('reader.page', { n: page })} / {total} · %{Math.round(percent)}
+            {t('reader.page', { n: page })} / {total} · {t('reader.percent', { n: Math.round(percent) })}
           </AppText>
         </View>
         <IconButton icon={warn ? 'warning-outline' : 'analytics-outline'} label={t('reader.report')} onPress={() => router.push(`/report/${id}`)} testID="open-report" />
@@ -203,14 +240,36 @@ export default function ReaderScreen() {
           mode={mode}
           anchor={state.anchor}
           bookmarks={bookmarkIds}
-          highlights={[]}
+          highlights={highlights}
           strings={strings}
           focus={requestedBlock ? { blockId: requestedBlock, page: requestedPage } : null}
           onEvent={onEvent}
         />
-        {activeBlock && mode === 'book' ? (
+        {selection && mode === 'book' ? (
+          <SelectionBar
+            text={selection.text}
+            color={color}
+            onColor={setColor}
+            aiOn={aiOn}
+            onExplain={() => {
+              setLearn({ blockId: selection.blockId, text: selection.text, start: selection.start, end: selection.end });
+              setLearnOpen(true);
+            }}
+            onHighlight={() => void addAnnotation(selection, '', color)}
+            onNote={() => setNoteFor({ mode: 'new', sel: selection })}
+            onClose={() => {
+              setSelection(null);
+              reader.current?.send({ type: 'clear-selection' });
+            }}
+          />
+        ) : null}
+        {activeBlock && mode === 'book' && !selection ? (
           <BlockActions
             block={activeBlock}
+            onExplain={() => {
+              setLearn({ blockId: activeBlock.id });
+              setLearnOpen(true);
+            }}
             bookmarked={bookmarkIds.includes(activeBlock.id)}
             onToggleBookmark={() => toggleBookmark(activeBlock.id)}
             onShowOriginal={() => showOriginal(activeBlock.id)}
@@ -239,6 +298,45 @@ export default function ReaderScreen() {
       <Sheet visible={typoOpen} onClose={() => setTypoOpen(false)} title={t('reader.typography')}>
         <TypographyControls settings={settings} onChange={(patch) => void updateReader(patch)} />
       </Sheet>
+      <LearnSheet
+        visible={learnOpen}
+        onClose={() => setLearnOpen(false)}
+        docId={id}
+        index={index}
+        target={learn}
+        onGoto={(blockId) => reader.current?.send({ type: 'goto', blockId, flash: true })}
+        onShowOriginal={showOriginal}
+        onSaveNote={async ({ blockId, start, end, quote, note, page }) => {
+          const a = await annRepo.add({ docId: id, blockId, start, end, quote, color, note, origin: 'ai', page });
+          setAnnotations((list) => [...list, a]);
+        }}
+      />
+      <NoteSheet
+        visible={noteFor !== null}
+        quote={noteFor?.mode === 'new' ? noteFor.sel.text : (annotations.find((a) => a.id === (noteFor?.mode === 'edit' ? noteFor.id : ''))?.quote ?? '')}
+        initialNote={noteFor?.mode === 'edit' ? (annotations.find((a) => a.id === noteFor.id)?.note ?? '') : ''}
+        initialColor={noteFor?.mode === 'edit' ? (annotations.find((a) => a.id === noteFor.id)?.color ?? color) : color}
+        aiNote={noteFor?.mode === 'edit' && annotations.find((a) => a.id === noteFor.id)?.origin === 'ai'}
+        onClose={() => setNoteFor(null)}
+        onSave={async (note, chosen) => {
+          if (!noteFor) return;
+          if (noteFor.mode === 'new') await addAnnotation(noteFor.sel, note, chosen);
+          else {
+            const updated = await annRepo.update(id, noteFor.id, { note, color: chosen });
+            if (updated) setAnnotations((list) => list.map((a) => (a.id === updated.id ? updated : a)));
+          }
+          setNoteFor(null);
+        }}
+        onDelete={
+          noteFor?.mode === 'edit'
+            ? async () => {
+                await annRepo.remove(id, noteFor.id);
+                setAnnotations((list) => list.filter((a) => a.id !== noteFor.id));
+                setNoteFor(null);
+              }
+            : undefined
+        }
+      />
       <FlagsSheet block={flagBlock} onClose={() => setFlagsFor(null)} onShowOriginal={showOriginal} />
     </SafeAreaView>
   );

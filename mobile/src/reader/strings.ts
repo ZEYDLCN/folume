@@ -25,5 +25,8 @@ export function readerStrings(): ReaderStrings {
     empty_unsupported: t('rt.empty_unsupported'),
     footnote: t('rt.footnote'),
     original_pages: t('rt.original_pages'),
+    check: t('rt.check'),
+    check_hint: t('rt.check_hint'),
+    check_start: t('rt.check_start'),
   };
 }

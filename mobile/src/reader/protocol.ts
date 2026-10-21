@@ -51,6 +51,9 @@ export interface ReaderStrings {
   empty_unsupported: string;
   footnote: string;
   original_pages: string;
+  check: string;
+  check_hint: string;
+  check_start: string;
 }
 
 export interface Anchor {
@@ -110,6 +113,8 @@ export type ReaderEvent =
   | { type: 'selection'; blockId: string; start: number; end: number; text: string; rect: SelectionRect }
   | { type: 'selection-clear' }
   | { type: 'flags'; blockId: string }
+  | { type: 'quiz'; sectionId: string }
+  | { type: 'highlight-tap'; id: string; rect: SelectionRect }
   | { type: 'link'; url: string }
   | { type: 'mode-changed'; mode: ReaderMode; blockId: string | null }
   | { type: 'log'; level: 'error' | 'warn' | 'info'; message: string };

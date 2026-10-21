@@ -12,12 +12,14 @@ export function BlockActions({
   bookmarked,
   onToggleBookmark,
   onShowOriginal,
+  onExplain,
   onClose,
 }: {
   block: Block;
   bookmarked: boolean;
   onToggleBookmark: () => void;
   onShowOriginal: () => void;
+  onExplain: () => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -55,6 +57,7 @@ export function BlockActions({
             {t('reader.page', { n: block.source[0].page })}
           </AppText>
         </View>
+        <IconButton icon="color-wand-outline" label={t('sel.explain')} onPress={onExplain} testID="action-explain" />
         <IconButton icon="document-text-outline" label={t('reader.showOriginal')} onPress={onShowOriginal} testID="action-original" />
         <IconButton
           icon={bookmarked ? 'bookmark' : 'bookmark-outline'}

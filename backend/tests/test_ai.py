@@ -185,7 +185,7 @@ def test_quiz_keeps_only_valid_cited_questions(client, llm):
 
 
 def test_offline_quiz_builds_cloze_questions_from_the_section(offline):
-    text = ("We define the routing loss as the expected cost of sending a token to the wrong expert. "
+    text = ("We define the routing loss as the expected cost of sending a token to the wrong expert; this routing loss is minimised. "
             "Sparse routing reduces memory because only a few experts are active at any step. "
             "The gating network produces a probability distribution over all available experts. "
             "Load balancing penalises experts that receive a disproportionate share of tokens. "

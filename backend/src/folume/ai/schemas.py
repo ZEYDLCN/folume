@@ -23,7 +23,8 @@ PassageKind = Literal["selection", "context", "retrieved", "caption", "equation"
 
 
 class Strict(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # responses always carry their defaults, so clients can rely on those fields
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
 
 
 class Passage(Strict):

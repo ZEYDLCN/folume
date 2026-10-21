@@ -197,6 +197,7 @@ export function renderBook(ctx: RenderCtx): HTMLElement {
     book.append(el('div', 'unsupported', null, ctx.strings.empty_unsupported));
     return book;
   }
+  const checks = checkpoints(ctx.doc);
   let lastPage = 0;
   for (const b of ctx.doc.blocks) {
     const node = renderBlock(b, ctx);
@@ -209,8 +210,41 @@ export function renderBook(ctx: RenderCtx): HTMLElement {
       lastPage = page;
     }
     book.append(node);
+    const sectionId = checks.get(b.id);
+    if (sectionId) {
+      const card = el('div', 'qc', { 'data-qc': sectionId });
+      card.append(
+        el('div', 'qct', null, el('strong', null, null, ctx.strings.check), el('small', null, null, ctx.strings.check_hint)),
+        el('button', null, { 'data-quiz': sectionId }, ctx.strings.check_start),
+      );
+      book.append(card);
+    }
   }
   return book;
+}
+
+/** Top-level body sections with enough text get an "Understanding check" card after their last block. */
+export function checkpoints(doc: Document): Map<string, string> {
+  const sections = new Map(doc.sections.map((s) => [s.id, s]));
+  const rootOf = (id: string | null): string | null => {
+    let cur = id ? sections.get(id) : undefined;
+    while (cur?.parent_id) cur = sections.get(cur.parent_id);
+    return cur?.id ?? null;
+  };
+  const chars = new Map<string, number>();
+  const last = new Map<string, string>();
+  for (const b of doc.blocks) {
+    const root = rootOf(b.section_id);
+    if (!root) continue;
+    last.set(root, b.id);
+    if (b.type === 'paragraph' || b.type === 'list_item') chars.set(root, (chars.get(root) ?? 0) + b.text.length);
+  }
+  const out = new Map<string, string>();
+  for (const [root, blockId] of last) {
+    const s = sections.get(root);
+    if (s && s.kind === 'body' && (chars.get(root) ?? 0) >= 700) out.set(blockId, root);
+  }
+  return out;
 }
 
 export function renderOriginal(ctx: RenderCtx): HTMLElement {

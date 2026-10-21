@@ -26,6 +26,9 @@ body.justify .blk-paragraph,body.justify .li .lt,body.justify .fn,body.justify .
 .h{font-weight:700;line-height:1.3;margin:1.5em 0 .55em;text-wrap:balance}
 h2.h{font-size:1.25em}h3.h{font-size:1.1em}h4.h{font-size:1em;font-style:italic}
 .h .hn{color:var(--muted);font-weight:600;margin-right:.45em;font-variant-numeric:tabular-nums}
+.qc{display:flex;align-items:center;gap:12px;margin:1.8em 0 1.2em;padding:12px 14px;border:1px solid var(--border);border-radius:12px;background:var(--card);font-family:var(--sans)}
+.qc .qct{flex:1;display:flex;flex-direction:column;gap:2px;font-size:14px;line-height:1.35}.qc small{color:var(--muted);font-size:12px}
+.qc button{font:600 13px var(--sans);color:var(--bg);background:var(--accent);border:0;border-radius:999px;padding:8px 16px}
 .pgsep{display:flex;align-items:center;gap:8px;font:600 11px/1 var(--sans);color:var(--muted);letter-spacing:.04em;margin:1.4em 0 .8em;
   text-transform:uppercase;cursor:pointer;user-select:none}
 .pgsep::before,.pgsep::after{content:'';flex:1;height:1px;background:var(--border)}
