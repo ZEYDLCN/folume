@@ -59,7 +59,8 @@ FlagCode = Literal[
 
 
 class Model(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    # the API always serializes defaults, so clients can rely on those fields being present
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
 
 
 class SourceRegion(Model):
@@ -248,3 +249,6 @@ class Document(Model):
     blocks: list[Block]
     quality: DocumentQuality
     image_scale: float = Field(description="Page image pixels per PDF point")
+    body_font_size: float = Field(
+        default=10.0, gt=0, description="Dominant body text size in PDF points; lets readers scale math images"
+    )

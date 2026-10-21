@@ -254,7 +254,8 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
     quality = _quality(pages, streams, blocks, doc_flags, furniture, omitted_chars_rotated, layouts)
     metadata = _metadata(blocks, sections, info, furniture, omitted_chars_rotated, keywords)
     doc = Document(id=doc_id, source=source, parser=parser, metadata=metadata, pages=page_infos,
-                   sections=sections, blocks=blocks, quality=quality, image_scale=opts.page_image_scale)
+                   sections=sections, blocks=blocks, quality=quality, image_scale=opts.page_image_scale,
+                   body_font_size=round(body_size, 2))
     report("done", 1.0)
     return ParseResult(doc, assets)
 
@@ -399,7 +400,13 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
             counters[pb.type] += 1
             n = counters[pb.type]
             sub = {"figure": "figures/f", "table": "tables/t", "equation": "equations/e"}[pb.type]
-            png, w, h, box = renderer.crop_png(reg.page, reg.bbox, scale=opts.crop_scale,
+            crop_bbox = reg.bbox
+            if pb.type == "equation" and reg.number:
+                # the number is shown beside the image (Block.number), so keep it out of the picture
+                body = [f.bbox for f in reg.fragments if f.text.strip() != reg.number]
+                if body:
+                    crop_bbox = union(body)
+            png, w, h, box = renderer.crop_png(reg.page, crop_bbox, scale=opts.crop_scale,
                                                transparent=pb.type == "equation")
             path = f"{sub}{n:04d}.png"
             assets[path] = png

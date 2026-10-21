@@ -68,7 +68,8 @@
         "page",
         "bbox",
         "width",
-        "height"
+        "height",
+        "transparent"
       ],
       "title": "Asset",
       "type": "object"
@@ -246,8 +247,20 @@
       "required": [
         "id",
         "type",
+        "text",
+        "spans",
+        "level",
+        "number",
+        "section_id",
         "source",
-        "confidence"
+        "confidence",
+        "flags",
+        "asset",
+        "table",
+        "caption_id",
+        "caption_for",
+        "reference",
+        "latex"
       ],
       "title": "Block",
       "type": "object"
@@ -307,7 +320,10 @@
         "score",
         "grade",
         "ledger",
-        "pages"
+        "pages",
+        "omitted",
+        "issues",
+        "counts"
       ],
       "title": "DocumentQuality",
       "type": "object"
@@ -403,6 +419,16 @@
           "title": "Year"
         }
       },
+      "required": [
+        "title",
+        "authors",
+        "abstract",
+        "doi",
+        "arxiv_id",
+        "year",
+        "keywords",
+        "language"
+      ],
       "title": "Metadata",
       "type": "object"
     },
@@ -544,7 +570,8 @@
         "page",
         "layout",
         "confidence",
-        "char_count"
+        "char_count",
+        "notes"
       ],
       "title": "PageQuality",
       "type": "object"
@@ -651,6 +678,8 @@
         }
       },
       "required": [
+        "page",
+        "block_id",
         "flag"
       ],
       "title": "QualityIssue",
@@ -733,6 +762,14 @@
           "title": "Year"
         }
       },
+      "required": [
+        "label",
+        "first_author",
+        "year",
+        "title",
+        "doi",
+        "url"
+      ],
       "title": "ReferenceInfo",
       "type": "object"
     },
@@ -811,7 +848,11 @@
       "required": [
         "id",
         "title",
+        "number",
         "level",
+        "kind",
+        "block_id",
+        "parent_id",
         "start_page"
       ],
       "title": "Section",
@@ -853,7 +894,8 @@
         "filename",
         "sha256",
         "size_bytes",
-        "page_count"
+        "page_count",
+        "producer"
       ],
       "title": "SourceInfo",
       "type": "object"
@@ -955,7 +997,15 @@
         }
       },
       "required": [
-        "text"
+        "text",
+        "bold",
+        "italic",
+        "sup",
+        "sub",
+        "mono",
+        "math",
+        "cite",
+        "link"
       ],
       "title": "Span",
       "type": "object"
@@ -980,7 +1030,8 @@
         }
       },
       "required": [
-        "rows"
+        "rows",
+        "header_rows"
       ],
       "title": "TableData",
       "type": "object"
@@ -1046,6 +1097,13 @@
       "title": "Blocks",
       "type": "array"
     },
+    "body_font_size": {
+      "default": 10.0,
+      "description": "Dominant body text size in PDF points; lets readers scale math images",
+      "exclusiveMinimum": 0,
+      "title": "Body Font Size",
+      "type": "number"
+    },
     "id": {
       "description": "First 16 hex chars of the PDF sha256",
       "title": "Id",
@@ -1089,14 +1147,17 @@
     }
   },
   "required": [
+    "schema_version",
     "id",
     "source",
     "parser",
     "metadata",
     "pages",
+    "sections",
     "blocks",
     "quality",
-    "image_scale"
+    "image_scale",
+    "body_font_size"
   ],
   "title": "Document",
   "type": "object"

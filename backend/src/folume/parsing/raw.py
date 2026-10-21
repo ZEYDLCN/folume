@@ -71,6 +71,7 @@ def extract_pages(data: bytes, max_pages: int | None = None) -> tuple[list[RawPa
             pages.append(_extract_page(page, idx))
             page.flush_cache()
     classify_math_fonts(pages)
+    derive_baselines(pages)
     return pages, info
 
 
@@ -141,6 +142,27 @@ def _collect_graphics(page, raw: RawPage) -> None:
         x0, x1, top, bottom = float(im["x0"]), float(im["x1"]), float(im["top"]), float(im["bottom"])
         if (x1 - x0) > 2 and (bottom - top) > 2:
             raw.images.append((x0, top, x1, bottom))
+
+
+def derive_baselines(pages: list[RawPage]) -> None:
+    """Baseline from the glyph box and a per-font descent ratio.
+
+    The text matrix misses the text-rise operator (`Ts`), which many producers use for sub/superscripts,
+    while the glyph box includes it. Per font, `(matrix baseline - box bottom) / size` is stable for
+    unraised text, so its median is the font's descent ratio; the true baseline is `bottom + ratio * size`.
+    """
+    ratios: dict[str, list[float]] = {}
+    for p in pages:
+        for c in p.chars:
+            if c.upright and c.size > 0:
+                ratios.setdefault(c.font, []).append((c.baseline - c.bottom) / c.size)
+    median_ratio = {f: sorted(v)[len(v) // 2] for f, v in ratios.items()}
+    overall = sorted(r for v in ratios.values() for r in v)
+    fallback = overall[len(overall) // 2] if overall else -0.2
+    for p in pages:
+        for c in p.chars:
+            if c.upright:
+                c.baseline = c.bottom + median_ratio.get(c.font, fallback) * c.size
 
 
 def classify_math_fonts(pages: list[RawPage]) -> None:

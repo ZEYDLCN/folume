@@ -185,6 +185,8 @@ def test_equations_keep_number_image_and_an_honest_flag(corpus):
         assert e.asset and e.asset.kind == "equation"
         assert any(f.code == "formula_image_only" for f in e.flags)
     assert any("^" in e.text or "_" in e.text for e in eqs)  # sub/superscripts survive in the approximation
+    for e in eqs:  # the number is rendered beside the picture, so the picture must not contain it
+        assert e.asset.bbox[2] < e.source[0].bbox[2] - 8, (e.id, e.asset.bbox, e.source[0].bbox)
 
 
 def test_tables_recover_cells_when_reliable_and_fall_back_to_image(corpus):
@@ -202,6 +204,20 @@ def test_footnotes_are_separate_blocks_with_their_marker(corpus):
     assert len(notes) == 2 and [n.number for n in notes] == ["1", "2"]
     body = " ".join(b.text for b in doc.blocks if b.type == "paragraph")
     assert not any(n.text[:30] in body for n in notes)
+
+
+def test_inline_subscripts_written_with_text_rise_are_detected(corpus):
+    """reportlab writes <sub> with the text-rise operator, which only the glyph box reveals."""
+    spans = [s for b in corpus["ieee_ml"].doc.blocks if b.type == "paragraph" for s in b.spans]
+    subs = [s for s in spans if s.sub and s.math]
+    assert subs, "no math subscripts found"
+    text = " ".join(b.text for b in corpus["ieee_ml"].doc.blocks if b.type == "paragraph")
+    assert "x_i denote" in text and "O(n^2)" in text
+
+
+def test_body_font_size_is_reported(corpus):
+    assert corpus["ieee_ml"].doc.body_font_size == 10.0
+    assert corpus["arxiv_bio"].doc.body_font_size == 11.0
 
 
 def test_metadata(corpus):

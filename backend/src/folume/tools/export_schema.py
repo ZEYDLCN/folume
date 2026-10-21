@@ -12,7 +12,7 @@ DEFAULT_PATH = Path(__file__).resolve().parents[3] / "schema" / "document.schema
 
 
 def render() -> str:
-    return json.dumps(Document.model_json_schema(), indent=2, sort_keys=True) + "\n"
+    return json.dumps(Document.model_json_schema(mode="serialization"), indent=2, sort_keys=True) + "\n"
 
 
 def main(argv: list[str]) -> int:
