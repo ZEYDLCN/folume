@@ -23,6 +23,28 @@ export function TypographyControls({
   const c = useColors();
   return (
     <View style={{ gap: space.lg }}>
+      <Field label={t('typo.layout')}>
+        <Segmented
+          value={settings.layout}
+          onChange={(layout) => onChange({ layout })}
+          options={[
+            { value: 'book', label: t('typo.layout.book') },
+            { value: 'magazine', label: t('typo.layout.magazine') },
+          ]}
+        />
+      </Field>
+
+      <Field label={t('typo.flow')} hint={settings.flow === 'paged' ? t('typo.flow.hint') : undefined}>
+        <Segmented
+          value={settings.flow}
+          onChange={(flow) => onChange({ flow })}
+          options={[
+            { value: 'scroll', label: t('typo.flow.scroll') },
+            { value: 'paged', label: t('typo.flow.paged') },
+          ]}
+        />
+      </Field>
+
       <Field label={t('typo.theme')}>
         <Row style={{ gap: space.md }}>
           {(Object.keys(SWATCH) as ThemeName[]).map((name) => (

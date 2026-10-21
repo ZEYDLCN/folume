@@ -27,6 +27,7 @@ interface State {
   selectedBlock: string | null;
   originalBlock: string | null;
   lastProgressAt: number;
+  lastAnchor: string | null;
 }
 
 const state: State = {
@@ -43,6 +44,7 @@ const state: State = {
   selectedBlock: null,
   originalBlock: null,
   lastProgressAt: 0,
+  lastAnchor: null,
 };
 
 let io: IntersectionObserver | null = null;
@@ -125,19 +127,30 @@ function observeImages(): void {
 
 // ---------------------------------------------------------------------------------------- settings
 
-function applySettings(s: ReaderSettings): void {
-  const prev = state.settings;
-  state.settings = s;
-  const body = document.body;
-  body.className = [
+/** The paged flow only applies to the converted view; the original pages always scroll. */
+const paged = (): boolean => state.mode === 'book' && state.settings?.flow === 'paged';
+
+function syncClasses(): void {
+  const s = state.settings;
+  if (!s) return;
+  document.body.className = [
     `t-${s.theme}`,
     `m-${s.margin}`,
+    `l-${s.layout}`,
     s.fontFamily === 'sans' ? 'sans' : '',
     s.justify ? 'justify' : '',
+    paged() ? 'f-paged' : '',
     state.mode === 'original' ? 'original' : '',
   ]
     .filter(Boolean)
     .join(' ');
+  document.documentElement.classList.toggle('f-paged', paged());
+}
+
+function applySettings(s: ReaderSettings): void {
+  const prev = state.settings;
+  state.settings = s;
+  syncClasses();
   const root = document.documentElement.style;
   root.setProperty('--fs', `${s.fontSize}px`);
   root.setProperty('--lh', String(s.lineHeight));
@@ -148,7 +161,59 @@ function applySettings(s: ReaderSettings): void {
 
 // ---------------------------------------------------------------------------------------- navigation
 
+// -- paged flow: the book is a row of columns, one screen per `clientWidth`
+
+const screenWidth = (): number => Math.max(1, bookEl()?.clientWidth ?? window.innerWidth);
+const screenCount = (): number => {
+  const b = bookEl();
+  return b ? Math.max(1, Math.ceil((b.scrollWidth - 2) / screenWidth())) : 1;
+};
+const screenIndex = (): number => Math.min(screenCount() - 1, Math.max(0, Math.round((bookEl()?.scrollLeft ?? 0) / screenWidth())));
+
+function turnPage(dir: 'next' | 'prev' | 'first' | 'last'): void {
+  const book = bookEl();
+  if (!book || !paged()) return;
+  const count = screenCount();
+  const to = dir === 'first' ? 0 : dir === 'last' ? count - 1 : Math.min(count - 1, Math.max(0, screenIndex() + (dir === 'next' ? 1 : -1)));
+  book.scrollTo({ left: to * screenWidth(), behavior: 'smooth' });
+}
+
+let settleTimer: number | undefined;
+/** After a swipe the position rests on a whole screen. */
+function settleScreen(): void {
+  window.clearTimeout(settleTimer);
+  settleTimer = window.setTimeout(() => {
+    const book = bookEl();
+    if (!book || !paged()) return;
+    const target = screenIndex() * screenWidth();
+    if (Math.abs(book.scrollLeft - target) > 1) book.scrollTo({ left: target, behavior: 'smooth' });
+    else reportProgress(true);
+  }, 140);
+}
+
+function topBlockPaged(): { id: string; offset: number } | null {
+  const book = bookEl();
+  if (!book) return null;
+  const els = Array.from(book.querySelectorAll<HTMLElement>('[data-b]'));
+  if (!els.length) return null;
+  const left = book.getBoundingClientRect().left + 2;
+  const lastRight = (e: HTMLElement) => {
+    const rects = e.getClientRects();
+    return rects.length ? rects[rects.length - 1].right : -Infinity;
+  };
+  // the first block with a part that reaches into the visible screen (blocks run in column order)
+  let lo = 0;
+  let hi = els.length - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (lastRight(els[mid]) <= left) lo = mid + 1;
+    else hi = mid;
+  }
+  return { id: els[lo].id, offset: 0 };
+}
+
 function topBlock(): { id: string; offset: number } | null {
+  if (paged()) return topBlockPaged();
   const els = Array.from(document.querySelectorAll<HTMLElement>('#book [data-b]'));
   if (!els.length) return null;
   let lo = 0;
@@ -190,6 +255,16 @@ function flash(node: HTMLElement | null): void {
 function gotoBlock(id: string, offset = 0, doFlash = false): void {
   const target = blockEl(visibleId(id));
   if (!target) return;
+  const book = bookEl();
+  if (paged() && book) {
+    const rect = target.getClientRects()[0];
+    if (rect) {
+      const x = rect.left - book.getBoundingClientRect().left + book.scrollLeft;
+      book.scrollTo({ left: Math.floor(x / screenWidth()) * screenWidth(), behavior: 'auto' });
+    }
+    if (doFlash) flash(target);
+    return;
+  }
   scrollToEl(target, offset);
   if (doFlash) flash(target);
 }
@@ -212,11 +287,19 @@ function reportProgress(force = false): void {
   }
   window.clearTimeout(progressTimer);
   state.lastProgressAt = now;
-  const max = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
-  const percent = clamp((window.scrollY / max) * 100, 0, 100);
+  const book = bookEl();
+  const isPaged = paged() && book;
+  const max = isPaged ? Math.max(1, (book as HTMLElement).scrollWidth - (book as HTMLElement).clientWidth) : Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
+  const percent = clamp(((isPaged ? (book as HTMLElement).scrollLeft : window.scrollY) / max) * 100, 0, 100);
   if (state.mode === 'book') {
     const top = topBlock();
-    if (top) post({ type: 'progress', blockId: top.id, offset: top.offset, percent, page: pageOf(top.id) });
+    if (top) {
+      state.lastAnchor = top.id;
+      post({
+        type: 'progress', blockId: top.id, offset: top.offset, percent, page: pageOf(top.id),
+        ...(isPaged ? { view: { index: screenIndex() + 1, count: screenCount() } } : {}),
+      });
+    }
   } else {
     post({ type: 'original-tap', blockId: state.originalBlock, page: visiblePage() });
   }
@@ -303,7 +386,7 @@ function setMode(mode: ReaderMode, blockId?: string): void {
     const top = state.mode === 'book' ? topBlock() : null;
     const id = blockId ?? top?.id ?? null;
     state.mode = 'original';
-    document.body.classList.add('original');
+    syncClasses();
     hidePill();
     const page = id ? pageOf(id) : 1;
     gotoPage(page);
@@ -317,7 +400,7 @@ function setMode(mode: ReaderMode, blockId?: string): void {
       id = firstBlockOnPage(page);
     }
     state.mode = 'book';
-    document.body.classList.remove('original');
+    syncClasses();
     hidePill();
     if (id) gotoBlock(id, 0, true);
     post({ type: 'mode-changed', mode, blockId: id });
@@ -392,6 +475,12 @@ function selectBlock(id: string | null): void {
 function onBookClick(e: MouseEvent): void {
   const t = e.target as HTMLElement;
   if (window.getSelection()?.toString()) return; // the user is selecting text
+  if (paged() && !t.closest('a,button,summary,details,mark.hl,[data-zoom]')) {
+    // the outer fifths of a screen turn the page, like in an e-reader
+    const x = e.clientX / window.innerWidth;
+    if (x < 0.22) return turnPage('prev');
+    if (x > 0.78) return turnPage('next');
+  }
   const cite = t.closest<HTMLElement>('a.cite');
   if (cite) {
     showCitation((cite.dataset.refs ?? '').split(' ').filter(Boolean));
@@ -496,6 +585,11 @@ function rerender(): void {
   const root = rootEl();
   root.replaceChildren(renderBook(ctx()), renderOriginal(ctx()));
   bookEl()?.addEventListener('click', onBookClick);
+  bookEl()?.addEventListener('scroll', () => {
+    // paged: a position is reported when the screen has come to rest, not while it is still sliding
+    if (paged()) settleScreen();
+    else reportProgress();
+  }, { passive: true });
   origEl()?.addEventListener('click', onOriginalTap);
   observeImages();
   paintHighlights(state.highlights);
@@ -547,7 +641,8 @@ function handle(msg: HostMessage): void {
     case 'settings': {
       const anchor = state.mode === 'book' ? topBlock() : null;
       applySettings(msg.settings);
-      if (anchor) requestAnimationFrame(() => gotoBlock(anchor.id, anchor.offset));
+      // two frames: the columns (or the single column) have to be laid out before a position can be found again
+      if (anchor) requestAnimationFrame(() => requestAnimationFrame(() => { gotoBlock(anchor.id, anchor.offset); reportProgress(true); }));
       break;
     }
     case 'mode':
@@ -560,6 +655,9 @@ function handle(msg: HostMessage): void {
     case 'goto-page':
       if (state.mode !== 'original') setMode('original', msg.blockId);
       gotoPage(msg.page);
+      break;
+    case 'page':
+      turnPage(msg.dir);
       break;
     case 'asset':
       receiveAsset(msg.path, msg.uri);
@@ -597,7 +695,23 @@ function boot(): void {
     }
   });
   window.addEventListener('scroll', () => reportProgress(), { passive: true });
-  window.addEventListener('resize', () => reportProgress());
+  window.addEventListener('resize', () => {
+    // a new width re-flows the columns: stay on the block that was being read
+    if (paged() && state.lastAnchor) {
+      const id = state.lastAnchor;
+      requestAnimationFrame(() => { gotoBlock(id); reportProgress(true); });
+    } else reportProgress();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!paged() || e.metaKey || e.ctrlKey || e.altKey) return;
+    const map: Record<string, 'next' | 'prev' | 'first' | 'last'> = {
+      ArrowRight: 'next', PageDown: 'next', ' ': 'next', ArrowLeft: 'prev', PageUp: 'prev', Home: 'first', End: 'last',
+    };
+    const dir = map[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    turnPage(dir);
+  });
   document.addEventListener('selectionchange', onSelectionChange);
   window.addEventListener('error', (e) => post({ type: 'log', level: 'error', message: String(e.message) }));
   post({ type: 'ready' });

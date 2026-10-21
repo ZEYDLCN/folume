@@ -462,6 +462,15 @@ export const tr = {
   'link.kind.url': '{label} adresinden indirilecek',
   'link.invalid': 'Bu bir makale bağlantısına benzemiyor.',
   'link.go': 'İndir ve dönüştür',
+  'reader.magazine': 'Dergi',
+  'reader.screen': 'Ekran {i} / {n}',
+  'typo.flow': 'Okuma akışı',
+  'typo.flow.scroll': 'Kaydır',
+  'typo.flow.paged': 'Sayfa sayfa',
+  'typo.flow.hint': 'Sayfa sayfa okurken ekranın kenarlarına dokunun, kaydırın ya da ok tuşlarını kullanın.',
+  'typo.layout': 'Düzen',
+  'typo.layout.book': 'Kitap',
+  'typo.layout.magazine': 'Dergi',
 } as const;
 
 export type StringKey = keyof typeof tr;

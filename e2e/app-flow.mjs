@@ -122,6 +122,33 @@ await check('reading position is restored after leaving and reopening the paper'
   await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
 });
 
+const readerBody = () => page.evaluate(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.className);
+
+await check('the paper can be read as a book, as a magazine, page by page, or in the original', async () => {
+  await page.getByRole('button', { name: 'Dergi', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('l-magazine'));
+  await shot('09a-magazine');
+  await page.getByTestId('open-typography').click();
+  await page.getByRole('button', { name: 'Sayfa sayfa', exact: true }).click();
+  await page.getByTestId('sheet-close').click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('f-paged'));
+  await page.waitForFunction(() => /Ekran \d+ \/ \d+/.test(document.querySelector('[data-testid=reader-position]')?.textContent ?? ''), null, { timeout: 10000 });
+  await shot('09b-magazine-paged');
+  // the choice is remembered
+  await page.reload();
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  const cls = await readerBody();
+  assert(cls.includes('l-magazine') && cls.includes('f-paged'), `after a reload: ${cls}`);
+  await page.getByRole('button', { name: 'Kitap', exact: true }).click();
+  await page.getByTestId('open-typography').click();
+  await page.getByRole('button', { name: 'Kaydır', exact: true }).click();
+  await page.getByTestId('sheet-close').click();
+  await page.waitForFunction(() => {
+    const c = document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList;
+    return c.contains('l-book') && !c.contains('f-paged');
+  });
+});
+
 await check('Original view shows the source page and returns to the same place', async () => {
   await page.getByRole('button', { name: 'Orijinal' }).click();
   await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('original'));

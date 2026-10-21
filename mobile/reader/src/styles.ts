@@ -70,7 +70,7 @@ body.t-dark .tint,body.t-black .tint{filter:invert(1)}
 .flagdot{position:absolute;right:0;top:-.15em;width:22px;height:22px;border-radius:50%;border:0;background:var(--warn);color:#fff;
   font:700 12px/22px var(--sans);text-align:center;padding:0}
 .flagdot.info{background:var(--muted)}
-.figtext{margin:.35em 0 .2em;font:12px var(--sans);color:var(--muted)}.figtext summary{cursor:pointer;padding:.2em 0}.figtext-body{white-space:pre-wrap;margin:.3em 0;font:12px/1.45 var(--sans);color:var(--text);user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
+.figtext{margin:.35em 0 .2em;font:12px var(--sans);color:var(--muted)}.figtext summary{cursor:pointer;padding:.2em 0}.figtext-body{white-space:pre-wrap;margin:.3em 0;font:12px/1.45 var(--sans);color:var(--fg);user-select:text;-webkit-user-select:text;overflow-wrap:anywhere}
 .chip{display:inline-block;font:11px/1.2 var(--sans);color:var(--warn);background:var(--warnbg);border-radius:999px;padding:3px 8px;margin-top:6px}
 .unsupported{margin:3em 0;padding:18px;border-radius:12px;background:var(--warnbg);color:var(--warn);font:15px/1.5 var(--sans)}
 #orig{display:none;padding:6px 0 40px}
@@ -95,4 +95,38 @@ body.original #orig{display:block}
 .sheet button{font:600 13px var(--sans);color:var(--accent);background:transparent;border:0;padding:6px 8px}
 .pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:30;border:0;border-radius:999px;
   padding:10px 16px;font:600 13px var(--sans);color:#fff;background:#1d2433;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+/* ---------------------------------------------------------------- magazine layout */
+body.l-magazine #book{max-width:64em}
+body.l-magazine .title{column-span:all;font-size:2.3em;font-weight:800;line-height:1.05;letter-spacing:-.025em;margin:.7em 0 .35em}
+body.l-magazine .authors{column-span:all;font:600 .68em/1.5 var(--sans);text-transform:uppercase;letter-spacing:.1em;color:var(--muted);margin:0 0 .2em}
+body.l-magazine .blk[data-label]{column-span:all;font-size:1.12em;line-height:1.5;font-style:italic;border-left:4px solid var(--accent);padding-left:1em;margin:1.1em 0 1.5em}
+body.l-magazine .blk[data-label]::before{font-style:normal;color:var(--accent)}
+body.l-magazine h2.h{column-span:all;font:700 .74em/1.2 var(--sans);text-transform:uppercase;letter-spacing:.14em;color:var(--accent);border-top:3px solid var(--accent);padding-top:.6em;margin:2.4em 0 1em;break-after:avoid}
+body.l-magazine h3.h{font:700 1.04em/1.3 var(--sans);margin:1.4em 0 .4em;break-after:avoid}
+body.l-magazine h4.h{break-after:avoid}
+body.l-magazine .lead::first-letter{float:left;font-size:3.5em;font-weight:800;line-height:.8;padding:.07em .1em 0 0;color:var(--accent)}
+body.l-magazine .fig,body.l-magazine .tbl,body.l-magazine .qc{column-span:all;margin:1.7em 0}
+body.l-magazine figcaption{font:600 .72em/1.5 var(--sans);letter-spacing:.015em;border-top:2px solid var(--fg);padding-top:.45em;color:var(--fg)}
+body.l-magazine .pgsep{display:none}
+body.l-magazine p,body.l-magazine .li{orphans:3;widows:3}
+@media (min-width:700px){
+  body.l-magazine:not(.f-paged) #book{column-count:2;column-gap:2.4em;column-rule:1px solid var(--border)}
+}
+/* ---------------------------------------------------------------- paged flow */
+html.f-paged,body.f-paged{height:100%;overflow:hidden}
+body.f-paged{padding:0}
+body.f-paged #book{height:100vh;height:100dvh;max-width:none;margin:0;
+  padding:calc(env(safe-area-inset-top) + 14px) var(--pad) calc(env(safe-area-inset-bottom) + 26px);
+  column-width:calc(100vw - 2 * var(--pad));column-gap:calc(2 * var(--pad));column-fill:auto;column-rule:none;
+  overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+body.f-paged #book::-webkit-scrollbar{display:none}
+body.f-paged *{column-span:none!important}
+body.f-paged .pgsep{display:none}
+body.f-paged .fig,body.f-paged .tbl,body.f-paged .eq,body.f-paged .qc,body.f-paged pre{break-inside:avoid}
+body.f-paged .h,body.f-paged figcaption{break-after:avoid}
+body.f-paged .imgwrap img{width:auto;max-width:100%;max-height:calc(100dvh - 13em);margin:0 auto;object-fit:contain}
+body.f-paged .imgwrap{display:flex;justify-content:center}
+@media (min-width:700px){
+  body.f-paged.l-magazine #book{column-width:calc((100vw - 4 * var(--pad)) / 2)}
+}
 `;

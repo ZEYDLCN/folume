@@ -453,4 +453,13 @@ export const en: Record<StringKey, string> = {
   'link.kind.url': 'Will be downloaded from {label}',
   'link.invalid': 'This does not look like a link to a paper.',
   'link.go': 'Download and convert',
+  'reader.magazine': 'Magazine',
+  'reader.screen': 'Screen {i} of {n}',
+  'typo.flow': 'Reading flow',
+  'typo.flow.scroll': 'Scroll',
+  'typo.flow.paged': 'Page by page',
+  'typo.flow.hint': 'Page by page: tap the edges of the screen, swipe, or use the arrow keys.',
+  'typo.layout': 'Layout',
+  'typo.layout.book': 'Book',
+  'typo.layout.magazine': 'Magazine',
 };

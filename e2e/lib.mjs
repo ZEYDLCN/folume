@@ -18,6 +18,7 @@ export const STRINGS = {
 
 export const SETTINGS = {
   theme: 'paper', fontFamily: 'serif', fontSize: 18, lineHeight: 1.6, margin: 'normal', justify: false, showNotes: false,
+  layout: 'book', flow: 'scroll',
 };
 
 export async function launch() {

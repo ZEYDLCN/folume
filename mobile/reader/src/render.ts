@@ -210,9 +210,15 @@ export function renderBook(ctx: RenderCtx): HTMLElement {
   }
   const checks = checkpoints(ctx.doc);
   let lastPage = 0;
+  let afterHeading = false; // the first paragraph of a section opens it (a drop cap in the magazine layout)
   for (const b of ctx.doc.blocks) {
     const node = renderBlock(b, ctx);
     if (!node) continue;
+    if (b.type === 'heading' && (b.level ?? 1) <= 1) afterHeading = true;
+    else if (afterHeading && b.type === 'paragraph') {
+      node.classList.add('lead');
+      afterHeading = false;
+    } else if (b.type !== 'heading') afterHeading = false;
     const label = labels.get(b.id);
     if (label && b.type === 'paragraph') node.dataset.label = label;
     const page = b.source[0].page;

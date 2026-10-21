@@ -41,6 +41,8 @@ export default function ReaderScreen() {
   const [doc, setDoc] = useState<Document | null | undefined>(undefined);
   const [state, setState] = useState<DocState | null>(null);
   const [mode, setMode] = useState<ReaderMode>('book');
+  /** paged flow: which screen of how many */
+  const [screen, setScreen] = useState<{ index: number; count: number } | null>(null);
   const [percent, setPercent] = useState(0);
   const [page, setPage] = useState(1);
   const [active, setActive] = useState<string | null>(null);
@@ -135,6 +137,7 @@ export default function ReaderScreen() {
         case 'progress':
           setPercent(e.percent);
           setPage(e.page);
+          setScreen(e.view ?? null);
           save({ percent: Math.round(e.percent * 10) / 10, anchor: { blockId: e.blockId, offset: e.offset } });
           break;
         case 'original-tap':
@@ -211,7 +214,7 @@ export default function ReaderScreen() {
             {titleOf(doc)}
           </AppText>
           <AppText variant="caption" muted testID="reader-position">
-            {t('reader.page', { n: page })} / {total} · {t('reader.percent', { n: Math.round(percent) })}
+            {screen && mode === 'book' ? t('reader.screen', { i: screen.index, n: screen.count }) : `${t('reader.page', { n: page })} / ${total}`} · {t('reader.percent', { n: Math.round(percent) })}
           </AppText>
         </View>
         <IconButton icon={warn ? 'warning-outline' : 'analytics-outline'} label={t('reader.report')} onPress={() => router.push(`/report/${id}`)} testID="open-report" />
@@ -219,15 +222,24 @@ export default function ReaderScreen() {
         <IconButton icon="text" label={t('reader.typography')} onPress={() => setTypoOpen(true)} testID="open-typography" />
       </View>
       <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.bg }}>
-        <Segmented
-          value={mode}
-          onChange={(m) => {
-            setMode(m);
+        <Segmented<'book' | 'magazine' | 'original'>
+          value={mode === 'original' ? 'original' : settings.layout}
+          onChange={(choice) => {
             setActive(null);
-            reader.current?.send({ type: 'mode', mode: m });
+            if (choice === 'original') {
+              setMode('original');
+              reader.current?.send({ type: 'mode', mode: 'original' });
+              return;
+            }
+            void updateReader({ layout: choice });
+            if (mode === 'original') {
+              setMode('book');
+              reader.current?.send({ type: 'mode', mode: 'book' });
+            }
           }}
           options={[
             { value: 'book', label: t('reader.book') },
+            { value: 'magazine', label: t('reader.magazine') },
             { value: 'original', label: t('reader.original') },
           ]}
         />

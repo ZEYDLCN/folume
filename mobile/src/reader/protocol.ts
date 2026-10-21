@@ -8,6 +8,10 @@ export type ThemeName = 'paper' | 'sepia' | 'dark' | 'black';
 export type FontFamily = 'serif' | 'sans';
 export type Margin = 'narrow' | 'normal' | 'wide';
 export type ReaderMode = 'book' | 'original';
+/** How the converted paper is set: like a book (one measure) or like a magazine (masthead, kickers, columns). */
+export type ReaderLayout = 'book' | 'magazine';
+/** Scrolling, or screens that are turned (the text flows into columns and never scrolls vertically). */
+export type ReaderFlow = 'scroll' | 'paged';
 
 export interface ReaderSettings {
   theme: ThemeName;
@@ -19,6 +23,8 @@ export interface ReaderSettings {
   justify: boolean;
   /** show informational conversion notes (not only warnings) next to blocks */
   showNotes: boolean;
+  layout: ReaderLayout;
+  flow: ReaderFlow;
 }
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -29,6 +35,8 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   margin: 'normal',
   justify: false,
   showNotes: false,
+  layout: 'book',
+  flow: 'scroll',
 };
 
 export interface ReaderStrings {
@@ -93,6 +101,8 @@ export type HostMessage =
   | { type: 'mode'; mode: ReaderMode; blockId?: string }
   | { type: 'goto'; blockId: string; offset?: number; flash?: boolean }
   | { type: 'goto-page'; page: number; blockId?: string }
+  /** turn a screen in the paged flow, or jump to the first/last one */
+  | { type: 'page'; dir: 'next' | 'prev' | 'first' | 'last' }
   | { type: 'asset'; path: string; uri: string }
   | { type: 'bookmarks'; ids: string[] }
   | { type: 'highlights'; items: HighlightView[] }
@@ -109,7 +119,15 @@ export interface SelectionRect {
 export type ReaderEvent =
   | { type: 'ready' }
   | { type: 'asset-request'; path: string }
-  | { type: 'progress'; blockId: string; offset: number; percent: number; page: number }
+  | {
+      type: 'progress';
+      blockId: string;
+      offset: number;
+      percent: number;
+      page: number;
+      /** paged flow only: which screen this is */
+      view?: { index: number; count: number };
+    }
   | { type: 'block-tap'; blockId: string; rect: SelectionRect }
   | { type: 'original-tap'; blockId: string | null; page: number }
   | { type: 'selection'; blockId: string; start: number; end: number; text: string; rect: SelectionRect }

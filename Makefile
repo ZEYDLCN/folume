@@ -2,7 +2,7 @@
 PY := backend/.venv/bin/python
 .DEFAULT_GOAL := help
 
-.PHONY: help setup-backend setup-mobile test-backend test-mobile lint check schema dev-api e2e
+.PHONY: help setup-backend setup-mobile test-backend test-mobile lint check schema dev-api e2e corpus
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n",$$1,$$2}'
@@ -32,6 +32,10 @@ check: lint test-backend test-mobile ## Everything CI would run
 dev-api: ## Start the API on :8000 with auto reload
 	cd backend && .venv/bin/python -m uvicorn folume.main:app --reload --port 8000
 
-e2e: ## Build the web app and run the browser end-to-end scenarios (needs Chromium)
+corpus: ## Generate the synthetic PDFs the end-to-end scripts read
+	cd backend && .venv/bin/python -m synth.corpus tests/.generated
+
+e2e: corpus ## Build the web app and run the browser end-to-end scenarios (needs Chromium)
+	cd backend && for n in ieee_ml acm_graph; do .venv/bin/python -m folume.tools.export_bundle tests/.generated/$$n.pdf ../e2e/out/$$n || exit 1; done
 	cd mobile && npm run build:reader && EXPO_PUBLIC_API_URL=http://localhost:8765 CI=1 npx expo export --platform web
-	cd e2e && for f in reader-runtime app-flow learn-flow knowledge-flow; do node $$f.mjs || exit 1; done
+	cd e2e && for f in reader-runtime formats app-flow learn-flow knowledge-flow link-flow; do node $$f.mjs || exit 1; done
