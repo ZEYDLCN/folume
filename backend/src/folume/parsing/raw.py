@@ -108,6 +108,7 @@ def _extract_page(page, number: int) -> RawPage:
         raw.chars.append(ch)
         last = ch
     _collect_graphics(page, raw)
+    raw.rules = merge_collinear(raw.rules)
     return raw
 
 
@@ -142,6 +143,31 @@ def _collect_graphics(page, raw: RawPage) -> None:
         x0, x1, top, bottom = float(im["x0"]), float(im["x1"]), float(im["top"]), float(im["bottom"])
         if (x1 - x0) > 2 and (bottom - top) > 2:
             raw.images.append((x0, top, x1, bottom))
+
+
+def merge_collinear(rules: list[Rule], tol: float = 1.2) -> list[Rule]:
+    """Strokes drawn cell by cell (some producers outline every table cell separately) are one line to a reader:
+    join collinear segments that touch."""
+    out: list[Rule] = []
+    for horizontal in (True, False):
+        axis = 1 if horizontal else 0  # position across the line
+        lo, hi = (0, 2) if horizontal else (1, 3)  # extent along the line
+        segs = sorted((r for r in rules if r.horizontal == horizontal), key=lambda r: ((r.bbox[axis] + r.bbox[axis + 2]) / 2, r.bbox[lo]))
+        cur: Rule | None = None
+        for r in segs:
+            pos = (r.bbox[axis] + r.bbox[axis + 2]) / 2
+            if cur is not None and abs((cur.bbox[axis] + cur.bbox[axis + 2]) / 2 - pos) <= tol and r.bbox[lo] <= cur.bbox[hi] + tol:
+                b = list(cur.bbox)
+                b[lo], b[hi] = min(b[lo], r.bbox[lo]), max(b[hi], r.bbox[hi])
+                b[axis], b[axis + 2] = min(b[axis], r.bbox[axis]), max(b[axis + 2], r.bbox[axis + 2])
+                cur = Rule((b[0], b[1], b[2], b[3]), horizontal)
+            else:
+                if cur is not None:
+                    out.append(cur)
+                cur = r
+        if cur is not None:
+            out.append(cur)
+    return out
 
 
 def derive_baselines(pages: list[RawPage]) -> None:

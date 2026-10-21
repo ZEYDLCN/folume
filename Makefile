@@ -24,7 +24,7 @@ test-mobile: ## Run mobile unit tests
 	cd mobile && npm test --silent
 
 lint: ## Lint backend (ruff) and typecheck mobile
-	cd backend && .venv/bin/ruff check src tests
+	cd backend && .venv/bin/ruff check src tests synth evals
 	cd mobile && npm run --silent typecheck
 
 check: lint test-backend test-mobile ## Everything CI would run

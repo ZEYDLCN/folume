@@ -648,6 +648,19 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
 
 _AFFIL = re.compile(r"univers|institut|department|dept\.|laborator|school|college|research|inc\.|corp|@|"
                     r"faculty|center|centre|academy|hospital|lab\b", re.I)
+_PERSON = re.compile(r"[A-Z][\w.\-']+(?: [A-Z][\w.\-']+){1,3}")
+
+
+def _looks_like_people(author: str | None) -> bool:
+    """The PDF Author field is often a software name or an account ("python-docx", "Microsoft Office User"):
+    only trust it when every part reads like a personal name."""
+    if not author:
+        return False
+    parts = [a.strip() for a in re.split(r";|,|\band\b", author) if a.strip()]
+    junk = re.compile(r"microsoft|office|word|admin|user|latex|pdf|docx?|unknown|author|owner|computer|windows", re.I)
+    return bool(parts) and all(_PERSON.fullmatch(p) and not junk.search(p) for p in parts)
+
+
 _DOI = re.compile(r"\b(10\.\d{4,9}/[^\s\"<>]+)", re.I)
 _ARXIV = re.compile(r"arXiv:\s*(\d{4}\.\d{4,5})(?:v\d+)?", re.I)
 
@@ -662,13 +675,14 @@ def _metadata(blocks: list[Block], sections: list[Section], info: dict, furnitur
         if b.type != "authors":
             continue
         for line in re.split(r"\n|;", b.text):
-            if _AFFIL.search(line):
-                continue
+            # "Name, Institute, University" on one line: keep the parts that are names, drop the affiliation
             for part in re.split(r",|\band\b|&|∗|\*|†", line):
                 name = re.sub(r"[\d†∗*]+$", "", part).strip()
-                if re.fullmatch(r"[A-Z][\w.\-']+(?: [A-Z][\w.\-']+){1,3}", name):
+                if not _AFFIL.search(name) and re.fullmatch(r"[A-Z][\w.\-']+(?: [A-Z][\w.\-']+){1,3}", name):
                     authors.append(name)
-    md.authors = list(dict.fromkeys(authors)) or ([info["author"]] if info.get("author") else [])
+    md.authors = list(dict.fromkeys(authors))
+    if not md.authors and _looks_like_people(info.get("author")):
+        md.authors = [a.strip() for a in re.split(r";|,|\band\b", info["author"]) if a.strip()]
     abstract_sec = next((s for s in sections if s.kind == "abstract"), None)
     if abstract_sec is not None:
         start = next((i for i, b in enumerate(blocks) if b.id == abstract_sec.block_id), None)

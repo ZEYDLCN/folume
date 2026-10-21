@@ -7,7 +7,7 @@ from collections import Counter
 
 from ..model import TableData
 from .regions import Region
-from .types import Fragment, Rule, union
+from .types import Char, Fragment, Rule, fragment_text, union
 
 
 def _resplit(frags: list[Fragment]) -> list[Fragment]:
@@ -42,7 +42,86 @@ def _rows(frags: list[Fragment]) -> list[list[Fragment]]:
     return [sorted(r, key=lambda f: f.x0) for r in rows]
 
 
+def _clusters(values: list[float], tol: float = 2.5) -> list[float]:
+    out: list[list[float]] = []
+    for v in sorted(values):
+        if out and v - out[-1][-1] <= tol:
+            out[-1].append(v)
+        else:
+            out.append([v])
+    return [sum(c) / len(c) for c in out]
+
+
+def _cell_text(chars: list[Char]) -> str:
+    """Text of one cell: lines top to bottom, a hyphen at a line end joins the words."""
+    lines: list[list[Char]] = []
+    for c in sorted(chars, key=lambda c: (c.baseline, c.x0)):
+        if lines and abs(lines[-1][0].baseline - c.baseline) <= 2.0:
+            lines[-1].append(c)
+        else:
+            lines.append([c])
+    text = ""
+    for ln in lines:
+        part = fragment_text(ln).strip()
+        if not part:
+            continue
+        text = text[:-1] + part if text.endswith("-") and part[:1].islower() else f"{text} {part}".strip()
+    return text
+
+
+def _grid_table(reg: Region, rules: list[Rule]) -> tuple[TableData | None, float]:
+    """A table drawn with a full grid of lines: the lines are the cells, wrapped text included."""
+    x0, y0, x1, y1 = reg.bbox
+    pad = 4.0
+    near = [r for r in rules if r.bbox[0] >= x0 - pad and r.bbox[2] <= x1 + pad and r.bbox[1] >= y0 - pad
+            and r.bbox[3] <= y1 + pad]
+    hs = [r for r in near if r.horizontal and r.length >= 0.6 * (x1 - x0)]
+    vs = [r for r in near if not r.horizontal and r.length >= 0.6 * (y1 - y0)]
+    ys = _clusters([(r.bbox[1] + r.bbox[3]) / 2 for r in hs])
+    xs = _clusters([(r.bbox[0] + r.bbox[2]) / 2 for r in vs])
+    if len(ys) < 3 or len(xs) < 3:
+        return None, 0.0
+    # a regular grid: every vertical line spans the whole table (no merged cells), and the lines enclose the text
+    top, bottom, left, right = ys[0], ys[-1], xs[0], xs[-1]
+    if any(r.bbox[1] > top + 3 or r.bbox[3] < bottom - 3 for r in vs if left - 2 <= (r.bbox[0] + r.bbox[2]) / 2 <= right + 2):
+        return None, 0.0
+    chars = [c for f in reg.fragments for c in f.chars] + list(reg.chars)
+    cells: dict[tuple[int, int], list[Char]] = {}
+    outside = 0
+    for c in chars:
+        cx, cy = (c.x0 + c.x1) / 2, (c.top + c.bottom) / 2
+        if not (left <= cx <= right and top <= cy <= bottom):
+            outside += 1
+            continue
+        col = max(i for i, x in enumerate(xs[:-1]) if x <= cx) if cx >= xs[0] else 0
+        row = max(i for i, y in enumerate(ys[:-1]) if y <= cy) if cy >= ys[0] else 0
+        cells.setdefault((row, col), []).append(c)
+    if not chars or outside > 0.05 * len(chars):
+        return None, 0.0
+    nrows, ncols = len(ys) - 1, len(xs) - 1
+    grid = [[_cell_text(cells.get((r, c), [])) for c in range(ncols)] for r in range(nrows)]
+    # a doubled outer rule leaves an empty band at the edge of the grid
+    while grid and not any(grid[0]):
+        grid.pop(0)
+        ys.pop(0)
+    while grid and not any(grid[-1]):
+        grid.pop()
+        ys.pop()
+    if len(grid) < 2:
+        return None, 0.0
+    nrows = len(grid)
+    filled = sum(1 for row in grid for cell in row if cell) / (nrows * ncols)
+    if filled < 0.5:
+        return None, 0.0
+    first = [c for c in chars if top <= (c.top + c.bottom) / 2 <= ys[1]]
+    header = 1 if first and sum(1 for c in first if c.bold) / len(first) >= 0.8 else 0
+    return TableData(rows=grid, header_rows=header), 0.95 if filled > 0.8 else 0.8
+
+
 def extract_table(reg: Region, rules: list[Rule]) -> tuple[TableData | None, float]:
+    grid = _grid_table(reg, rules)
+    if grid[0] is not None:
+        return grid
     rows = _rows(_resplit(reg.fragments))
     if len(rows) < 2:
         return None, 0.2

@@ -197,6 +197,7 @@ class Builder:
         self.front = True
         self.section_kind = "front"
         self.sizes_seen_for_headings: list[tuple[float, bool]] = []
+        self.indent_style = False
 
     # ---- helpers --------------------------------------------------------------------------------
     def geometry(self, stream: PageStream, col: int) -> tuple[float, float]:
@@ -385,7 +386,9 @@ class Builder:
                         and id(items[j]) not in fn_lines \
                         and abs(items[j].size - ln.size) <= 0.6 \
                         and items[j].baseline - group[-1].baseline <= 1.45 * ln.size \
-                        and not self.caption_start(items[j], None) and not self.starts_with_indent(items[j], ln):
+                        and not self.caption_start(items[j], None) \
+                        and (not self.starts_with_indent(items[j], ln) or group[-1].x1 >= group[-1].col_right - 2 * ln.size):
+                    # (a centered short last line after a full-width line is still the caption's second line)
                     group.append(items[j])
                     j += 1
                 blk = PBlock("caption", st.page.number, lines=group, label=cap[1], number=cap[2])
@@ -524,8 +527,21 @@ class Builder:
         # no labels and flush-left continuation lines: new entry only after a sentence end and a gap
         return hanging or spaced
 
+    def continues_spanning(self, prev: Line, ln: Line, lead: float) -> bool:
+        """The short last line of a full-width paragraph lies inside one column: it still belongs to that paragraph."""
+        if prev.column != SPAN or ln.column not in (0, 1):
+            return False
+        gap = ln.baseline - prev.baseline
+        if not 0.9 * ln.size < gap <= 1.32 * lead:
+            return False
+        full_width = prev.col_right - prev.col_left
+        return (prev.width >= 0.8 * full_width and abs(ln.x0 - prev.x0) <= 0.6 * ln.size
+                and abs(ln.size - prev.size) <= 1.0)
+
     def breaks_paragraph(self, para: PBlock, prev: Line | None, ln: Line, lead: float, is_list: bool) -> bool:
-        if prev is None or prev.column != ln.column or prev.page != ln.page:
+        if prev is None or prev.page != ln.page:
+            return True
+        if prev.column != ln.column and not self.continues_spanning(prev, ln, lead):
             return True
         if is_list:
             return True
@@ -581,7 +597,18 @@ class Builder:
         self.link_captions(flow)
         return flow
 
+    def indents_paragraphs(self, blocks: list[PBlock]) -> bool:
+        """Does this document mark every new paragraph with a first-line indent? Then an unindented first line at the
+        top of a column or page is the same paragraph carrying on, even when the previous line ended a sentence."""
+        starts = []
+        for prev, b in zip(blocks, blocks[1:], strict=False):
+            if b.type == "paragraph" and prev.type in ("paragraph", "list_item") and b.first_line and prev.last_line \
+                    and b.first_line.page == prev.last_line.page and b.first_line.column == prev.last_line.column:
+                starts.append((b.first_line.x0 - b.first_line.col_left) > 0.7 * b.first_line.size)
+        return len(starts) >= 2 and sum(starts) / len(starts) >= 0.8
+
     def merge_continuations(self, blocks: list[PBlock]) -> list[PBlock]:
+        self.indent_style = self.indents_paragraphs(blocks)
         out: list[PBlock] = []
         last_text: PBlock | None = None
         interrupted = False  # a float/caption/footnote object sat between the two blocks
@@ -620,7 +647,13 @@ class Builder:
             return False
         a_open = (not ends_sentence(atext)) or atext.endswith("-")
         b_cont = btext[:1].islower() or (atext.endswith("-") and btext[:1].isalpha())
+        # a number can resume a sentence too ("... reduces accuracy by" / "14% ..."), but only after a word that is
+        # still waiting for its object
+        if not b_cont and re.match(r"[\d(\[]", btext) and re.search(r"[a-z,]$", atext):
+            b_cont = True
         unindented = (fb.x0 - fb.col_left) < 0.7 * fb.size
+        if not a_open and not b_cont and unindented and self.indent_style and not interrupted:
+            return True
         # a continuation starts at the top of its column
         return a_open and b_cont and unindented
 

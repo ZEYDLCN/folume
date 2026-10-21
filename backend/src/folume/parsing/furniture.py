@@ -11,7 +11,8 @@ from .types import Fragment, RawPage
 _PAGE_NO = re.compile(r"^(?:page\s*)?(?:\d{1,4}|[ivxlc]{1,6})(?:\s*(?:of|/)\s*\d{1,4})?$", re.I)
 TOP_BAND = 0.075
 BOTTOM_BAND = 0.925
-MAX_LEN = 110
+MAX_LEN = 110  # a lone line in the margin
+MAX_REPEATED_LEN = 260  # copyright lines and long URLs are fine when the same line repeats on several pages
 
 
 @dataclass
@@ -43,7 +44,7 @@ def detect_furniture(pages: list[RawPage], frags: dict[int, list[Fragment]],
     for number, fl in frags.items():
         for f in fl:
             b = band(f)
-            if b is None or len(f.text) > MAX_LEN:
+            if b is None or len(f.text) > MAX_REPEATED_LEN:
                 continue
             if _PAGE_NO.match(f.text.strip()):
                 out.append(Furniture(f, "page_number"))
