@@ -3,6 +3,18 @@
 Bu belge README'deki ürün tanımının mühendislik karşılığını ve geliştirmenin faz planını içerir.
 Mimari kararlar için bkz. [ARCHITECTURE.md](ARCHITECTURE.md).
 
+## Durum
+
+| Faz | Durum | Not |
+|---|---|---|
+| 0 — Temel ve plan | ✅ tamamlandı | Monorepo, belge modeli v1, araçlar |
+| 1 — Reading MVP | ✅ uygulandı, sentetik/araç üretimli PDF'lerle doğrulandı | Gerçek makale ve cihaz denemesi **yapılmadı** (bkz. EVALUATION.md) |
+| 2 — Learning Layer | ✅ uygulandı, sahte LLM ile doğrulandı | Gerçek model denemesi **yapılmadı** |
+| 3 — Knowledge Workspace | ✅ uygulandı, iki “cihaz” + gerçek API ile doğrulandı | Kurallı kavram çıkarımı gerçek makalelerde sınanmadı |
+| 4 — Sertleştirme | ✅ tamamlandı | Bağımsız PDF üreticileri, süreç yalıtımı, belgeler |
+
+Bilinçli olarak yapılmayanlar ve açık riskler: bu belgenin sonundaki “Kapsam dışı” ve [EVALUATION.md](EVALUATION.md) §4.
+
 ## 1. Ürünün özü (ve mühendislik gereksinimleri)
 
 Ürün bir "PDF okuyucu" ya da "AI özetleyici" değil. İddia şu: **makalenin kendisi merkezde kalır,
@@ -23,7 +35,8 @@ Bu geliştirme ortamında **gerçek akademik PDF'ler yoktur** (arXiv/HuggingFace
 Bu nedenle:
 
 - Ayrıştırıcı, gerçek LaTeX/Word çıktılarına benzeyecek biçimde üretilmiş **sentetik** çift/tek sütunlu makalelerle (bilinen doğru yapıyla)
-  ölçülür. Gerçek dünya kalitesi README'nin de söylediği gibi küçük bir gerçek PDF setiyle ayrıca doğrulanmalıdır (bkz. `docs/EVALUATION.md`).
+  ölçülür. Sentetik üreticinin kendi yanlılığını azaltmak için ayrıca iki **bağımsız üretici** kullanılır: LibreOffice (DOCX → PDF) ve
+  Chromium (HTML/MathML → PDF). Gerçek dünya kalitesi README'nin de söylediği gibi küçük bir gerçek PDF setiyle ayrıca doğrulanmalıdır (bkz. `docs/EVALUATION.md`).
 - Mobil arayüz, Expo web derlemesi + Chromium ile uçtan uca çalıştırılıp doğrulanır; iOS/Android cihaz denemesi yapılamamıştır.
 - LLM çağrıları gerçek bir sağlayıcıya karşı denenemez; sağlayıcı soyutlaması sahte (fake) HTTP sunucusuna karşı sınanır.
 - Docling dönüştürücüsü, model ağırlıkları indirilemediği için burada çalıştırılamaz; ayrıştırıcı arayüzü onu ileride takmaya uygun tutulur.
@@ -73,8 +86,11 @@ Her faz sonunda: testler yeşil, tip kontrolleri temiz, README onay kutuları ya
 4. Dışa aktarma: BibTeX, RIS, CSL-JSON, Markdown notları, tam yedek (JSON); DOI/üst veri çıkarımı.
 5. İsteğe bağlı senkronizasyon: kendi sunucunda, anahtar tabanlı, kayıt-bazlı son-yazan-kazanır birleştirme; PDF'ler varsayılan olarak senkronlanmaz.
 
-### Faz 4 — Sertleştirme
-- Uçtan uca web akışı (Playwright), performans notları, erişilebilirlik gözden geçirmesi.
+### Faz 4 — Sertleştirme (yapıldı)
+- Uçtan uca web akışları (Playwright, dört betik), performans notları (EVALUATION.md §3).
+- Bağımsız PDF üreticileri (LibreOffice, Chromium) ile ayrıştırıcıda bulunan ve düzeltilen hatalar (EVALUATION.md §2.2).
+- Sunucu: her dönüşüm ayrı süreçte, zaman aşımı + bellek sınırı + aşırı büyük sayfa reddi; Dockerfile ve CI iş akışı.
+- Android/iOS paketleme denemesi (derleniyor; cihazda çalıştırılmadı), kullanılamayan ağ nedeniyle gerçek makale denemesi yapılamadı.
 - `docs/EVALUATION.md`: başarı ölçütlerinin hangileri otomatik ölçülüyor, hangileri kullanıcı testi gerektiriyor.
 - README durumunun dürüst güncellenmesi, commit geçmişi taraması.
 

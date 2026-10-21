@@ -57,9 +57,47 @@ PDF bytes
  → Document + assets
 ```
 
+## Bilgi katmanı (istemci)
+
+Tamamı cihazda, saf TypeScript'te (`mobile/src/core`):
+
+- **Kavramlar** (`knowledge/concepts.ts`): tanımlı kısaltmalar (“Large Language Model (LLM)”), açık tanımlar (“We define X as…”), vurgulu terimler,
+  anahtar sözcükler, başlıklar ve sık geçen isim öbekleri. Her kavram tanım cümlesini, kaynak bloğunu ve sayfasını taşır; hiçbir şey uydurulmaz.
+- **Bağlantılar** (`knowledge/connections.ts`): iki makalenin ortak kavramları (kısaltma uzun biçimiyle eşleşir). İlişki yalnızca makalelerin
+  kendi söylediğinden çıkar: *ortak*, *tamamlayıcı* (yalnızca biri tanımlıyor), *ikisi de tanımlıyor*. “Çelişiyor mu?” sorusu yalnızca kullanıcı isterse,
+  iki makaleden seçilen pasajlarla ve kaynak doğrulamalı AI karşılaştırmasıyla yanıtlanır.
+- **Arama** (`knowledge/search.ts`): tüm makaleler üzerinde BM25; sonuç blok ve sayfaya götürür.
+- **Aralıklı tekrar** (`learning/srs.ts`): SM-2; kaçırılan sorular ve tanımlı kavramlar kart olur, kartın arkası yazarın cümlesidir ve kaynağa bağlıdır.
+- **Dışa aktarma** (`export/`): BibTeX, RIS, CSL-JSON (PDF yayın yerini söylemiyorsa `@misc`; alan uydurulmaz), makalenin kendi kaynakçası, Markdown notlar.
+
+## Kayıtlar, yedek ve senkron
+
+Kullanıcıya ait her şey (notlar, vurgular, okuma durumu, test sonuçları, tekrar kartları, etiketler) anahtarlı **kayıt**tır:
+
+```text
+ann/{docId}/{id}   state/{docId}   quiz/{docId}/{id}   card/{docId}/{id}   tags/{docId}
+{ key, updatedAt, deleted, data }
+```
+
+`docId`, PDF'nin SHA-256 özetinin ilk 16 karakteridir; aynı PDF her cihazda aynı kimliği alır, bu yüzden notlar yeniden içe aktarılan makaleye kendiliğinden oturur.
+
+- **Birleştirme** (`data/records.ts`): kayıt başına son yazan kazanır; silmeler “mezar taşı” olarak taşınır; yeni bir düzenleme eski bir silmeyi geçer, eski bir kopya silineni geri getirmez.
+  Dışarıdan gelen her kayıt anahtarı, şekli ve içindeki kimliklerle doğrulanır; geçersizler hiç yazılmaz.
+- **Yedek**: aynı kayıtların JSON dosyası (ayarlar, API/senkron anahtarı ve PDF'ler yoktur). Geri yükleme cihazdaki daha yeni işi ezmez.
+- **Senkron** (`services/syncEngine.ts`, `routes/sync.py`): önce çek, birleştir, sonra değişenleri gönder. İstemci anahtardan `sha256("folume-sync-v1:" + anahtar)` türetir;
+  sunucu yalnızca bu özeti görür (ad alanı). Sunucu kayıtları anlamsız JSON olarak saklar, sıra numarası (`seq`) verir, gelecek tarihli (> 5 dk) saatleri kırpar,
+  boyut/adet sınırı uygular ve içerik yankılamaz. Varsayılan **kapalı**; PDF'ler ve makale metni senkronlanmaz.
+  Bir makaleyi cihazdan silmek notlarını diğer cihazlardan silmez (“burada sil”).
+
+## Dönüşüm süreçleri
+
+Sunucudaki her dönüşüm ayrı bir süreçte (`forkserver`) çalışır: ana süreç PDF baytlarını bir boruyla gönderir, ilerlemeyi borudan okur,
+çocuk sonuçları geçici iş dizinine yazar. Zaman aşımında ya da bellek sınırı aşıldığında süreç öldürülür, iş `timeout`/`too_complex` ile başarısız olur,
+dizin temizlenir ve sunucu etkilenmez. PDF diske yazılmaz.
+
 ## Güvenlik ve gizlilik özeti
 
 - API anahtarı (`FOLUME_API_KEY`) tanımlıysa tüm `/v1` uçları `X-API-Key` ister.
-- Yükleme sınırları: boyut, sayfa sayısı, `%PDF` imzası; işlem zaman aşımı.
+- Yükleme sınırları: boyut, sayfa sayısı, sayfa boyutu, `%PDF` imzası; dönüşüm başına süreç yalıtımı, zaman aşımı ve bellek sınırı.
 - AI geçidi içerik loglamaz; istek gövdeleri hata günlüklerine yazılmaz.
 - Mobil istemci: AI ve görsel paylaşımı ayrı anahtarlar, varsayılan **kapalı**; ilk kullanımda açık onay.

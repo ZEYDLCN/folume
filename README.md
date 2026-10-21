@@ -115,49 +115,52 @@ Farkımız tek bir özellik değil; okuma rahatlığını, kaynak güvenilirliğ
 
 ---
 
-## Planlanan geliştirme yol haritası
+## Geliştirme yol haritası
+
+> `[x]` işaretli maddeler **uygulandı ve otomatik testlerle doğrulandı** (sentetik ve araç üretimli PDF'ler, sahte LLM, web derlemesi).
+> Gerçek makaleler, gerçek cihazlar, gerçek bir LLM ve gerçek kullanıcılarla doğrulama **henüz yapılmadı**; bkz. [Durum](#durum) ve [docs/EVALUATION.md](docs/EVALUATION.md).
 
 ### Faz 1 — Reading MVP
 
-- [ ] PDF içe aktarma
-- [ ] Çift sütunlu akademik makaleler için belge ayrıştırma
-- [ ] Mobil uyumlu Book View
-- [ ] Tema, yazı boyutu ve satır aralığı ayarları
-- [ ] Orijinal PDF ↔ Book View geçişi
-- [ ] Temel yer imi ve okuma ilerlemesi
-- [ ] Formül, şekil ve tablolar için kalite kontrolü
+- [x] PDF içe aktarma
+- [x] Çift sütunlu akademik makaleler için belge ayrıştırma
+- [x] Mobil uyumlu Book View
+- [x] Tema, yazı boyutu ve satır aralığı ayarları
+- [x] Orijinal PDF ↔ Book View geçişi
+- [x] Temel yer imi ve okuma ilerlemesi
+- [x] Formül, şekil ve tablolar için kalite kontrolü *(metin defteri, blok bayrakları, dönüşüm raporu)*
 
 ### Faz 2 — Learning Layer
 
-- [ ] Kaynak pasajına bağlı AI açıklamaları
-- [ ] Teknik kavram ve formül açıklamaları
-- [ ] Not alma, vurgulama ve kaynak eşleştirmesi
-- [ ] Bölüm bazlı anlama soruları
-- [ ] Açıklama ve çeviri seçenekleri
+- [x] Kaynak pasajına bağlı AI açıklamaları
+- [x] Teknik kavram ve formül açıklamaları
+- [x] Not alma, vurgulama ve kaynak eşleştirmesi
+- [x] Bölüm bazlı anlama soruları
+- [x] Açıklama ve çeviri seçenekleri
 
 ### Faz 3 — Knowledge Workspace
 
-- [ ] Kişisel makale kütüphanesi
-- [ ] Makaleler arası kavram bağlantıları
-- [ ] Öğrenilen konular için akıllı tekrar
-- [ ] Dışa aktarma ve referans yöneticisi entegrasyonları
-- [ ] İsteğe bağlı cihazlar arası senkronizasyon
+- [x] Kişisel makale kütüphanesi
+- [x] Makaleler arası kavram bağlantıları
+- [x] Öğrenilen konular için akıllı tekrar
+- [x] Dışa aktarma ve referans yöneticisi entegrasyonları *(BibTeX, RIS, CSL-JSON, Markdown notlar, JSON yedek)*
+- [x] İsteğe bağlı cihazlar arası senkronizasyon *(kendi sunucunda, varsayılan kapalı)*
 
 ---
 
 ## Önerilen teknik yaklaşım
 
-> Aşağıdakiler kesinleşmiş ya da uygulanmış teknoloji seçimleri değil, ilk prototip için değerlendirilen mimari yönelimdir.
+> Aşağıdaki tablo ilk prototip için değerlendirilen mimari yönelimdir; sağ sütun prototipte **gerçekte kullanılanı** gösterir.
 
-| Katman | Aday teknolojiler / yaklaşım |
-|---|---|
-| Mobil uygulama | React Native + Expo |
-| API | Python + FastAPI |
-| PDF işleme | Docling; gerektiğinde PyMuPDF ve özel layout düzeltmeleri |
-| Belge modeli | Yapılandırılmış bloklar + kaynak sayfa/konum eşlemesi |
-| Okuma arayüzü | Mobil tipografiye uyarlanan zengin metin renderer'ı |
-| AI desteği | Kaynağa bağlı retrieval + LLM |
-| Veri saklama | İlk aşamada yerel depolama; sonra opsiyonel senkronizasyon |
+| Katman | Aday teknolojiler / yaklaşım | Prototipte uygulanan |
+|---|---|---|
+| Mobil uygulama | React Native + Expo | Expo (SDK 58), React Native, expo-router, TypeScript |
+| API | Python + FastAPI | FastAPI; dönüşümler ayrı süreçte, zaman aşımı ve bellek sınırlı |
+| PDF işleme | Docling; gerektiğinde PyMuPDF ve özel layout düzeltmeleri | `pdfplumber` + `pypdfium2` ve özel yerleşim/yapı hattı (PyMuPDF AGPL olduğu için seçilmedi; Docling denenmedi) |
+| Belge modeli | Yapılandırılmış bloklar + kaynak sayfa/konum eşlemesi | Blok + `(sayfa, bbox)` kaynağı + kalite bayrakları + metin defteri |
+| Okuma arayüzü | Mobil tipografiye uyarlanan zengin metin renderer'ı | WebView/iframe içinde TypeScript okuyucu runtime'ı |
+| AI desteği | Kaynağa bağlı retrieval + LLM | İstemcide BM25 retrieval; OpenAI uyumlu LLM geçidi; kaynak doğrulama; AI kapalıyken yerel yedek |
+| Veri saklama | İlk aşamada yerel depolama; sonra opsiyonel senkronizasyon | Yerel-öncelikli; kayıt tabanlı, son-yazan-kazanır, isteğe bağlı senkron |
 
 ---
 
@@ -176,9 +179,28 @@ Farkımız tek bir özellik değil; okuma rahatlığını, kaynak güvenilirliğ
 
 ## Durum
 
-🚧 **Konsept / ürün keşfi**
+🚧 **Çalışan prototip — henüz ürün değil**
 
-Bu README, hedeflenen ürünü tanımlar. Anlatılan özellikler henüz tamamlanmış veya kullanıma sunulmuş olarak değerlendirilmemelidir. İlk hedef, küçük bir PDF seti ve gerçek kullanıcı testleriyle Book View kalitesini doğrulamaktır.
+Üç fazın tamamı uygulandı ve otomatik testlerden (backend, mobil birim, Playwright ile uçtan uca web akışları) geçiyor. Bu, ürünün hazır olduğu anlamına **gelmez**:
+
+- Ayrıştırıcı sentetik makaleler ve iki bağımsız araçla (LibreOffice, Chromium) üretilmiş PDF'lerle doğrulandı. **Gerçek akademik makalelerle denenmedi** (geliştirme ortamında erişilemedi).
+- Mobil uygulama web derlemesinde ve telefon boyutlu Chromium'da doğrulandı; Android/iOS paketleri derleniyor ama **cihazda çalıştırılmadı**.
+- AI özellikleri sahte bir OpenAI uyumlu sunucuyla sınandı; **gerçek bir model denenmedi**.
+- Anlama kazanımı, kullanıcı tercihi ve geri dönüş ölçütleri için **kullanıcı testi yapılmadı**.
+- Kapsam dışı: OCR (taranmış PDF'ler “desteklenmiyor” diye işaretlenir), LaTeX üretimi, 3+ sütunlu düzenlerde güvenilir okuma sırası, sayfa sayfa okuma modu.
+
+Sıradaki adım, küçük bir gerçek PDF seti ve gerçek kullanıcı testleriyle Book View kalitesini doğrulamaktır ([protokol](docs/EVALUATION.md#5-gerçek-pdf-seti-ile-doğrulama-protokolü-önerilen-sonraki-adım)).
+
+### Çalıştırma ve belgeler
+
+```bash
+make setup-backend && make setup-mobile   # bir kez
+make dev-api                              # API (http://localhost:8000)
+cd mobile && npm run web                  # uygulama (tarayıcıda)
+make check                                # tüm testler
+```
+
+- [Geliştirme ve işletme rehberi](docs/DEVELOPMENT.md) · [Mimari](docs/ARCHITECTURE.md) · [Yol haritası ve durum](docs/ROADMAP.md) · [Değerlendirme](docs/EVALUATION.md)
 
 ---
 
