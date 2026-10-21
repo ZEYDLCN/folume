@@ -510,7 +510,6 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
         elif pb.type == "paragraph" and kind == "abstract" and spans and RUN_IN_KEYWORDS.match(text):
             m = RUN_IN_KEYWORDS.match(text)
             keywords = [k.strip(" .") for k in re.split(r"[,;·]", text[m.end():]) if k.strip(" .")]
-            spans, text = _strip_prefix(spans, RUN_IN_KEYWORDS)
 
         info = None
         if pb.type == "reference":

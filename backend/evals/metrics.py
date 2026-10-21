@@ -40,8 +40,6 @@ def truth_tokens(t: dict) -> list[str]:
         text = re.sub(r"^\s*\[\d+\]\s*", "", text)
     if t["type"] == "footnote":
         text = re.sub(r"^\s*\d+\s*", "", text)
-    if t.get("role") == "keywords":
-        text = re.sub(r"^\s*(keywords?|index terms)\s*[:—]?\s*", "", text, flags=re.I)
     return tokens(text)
 
 

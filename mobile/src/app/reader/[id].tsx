@@ -1,0 +1,245 @@
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Linking, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import { indexDocument, titleOf, type DocIndex } from '@/core/docModel';
+import type { Document } from '@/core/types';
+import type { DocState } from '@/data/library';
+import { BlockActions } from '@/features/reader/BlockActions';
+import { ContentsSheet } from '@/features/reader/ContentsSheet';
+import { FlagsSheet } from '@/features/reader/FlagsSheet';
+import { TypographyControls } from '@/features/reader/TypographyControls';
+import type { ReaderEvent, ReaderMode } from '@/reader/protocol';
+import { ReaderView, type ReaderViewHandle } from '@/reader/ReaderView';
+import { readerStrings } from '@/reader/strings';
+import { getStores } from '@/services/container';
+import { useSettings, useLocale } from '@/state/settings';
+import { AppText, Button, IconButton, ProgressBar, Segmented, Sheet } from '@/ui/components';
+import { space, useColors } from '@/ui/theme';
+import { useT } from '@/ui/useT';
+
+const first = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+
+export default function ReaderScreen() {
+  const params = useLocalSearchParams<{ id: string; block?: string; mode?: string; page?: string }>();
+  const id = first(params.id) as string;
+  const router = useRouter();
+  const t = useT();
+  const c = useColors();
+  useLocale();
+  const { library } = getStores();
+  const settings = useSettings((s) => s.reader);
+  const updateReader = useSettings((s) => s.updateReader);
+
+  const [doc, setDoc] = useState<Document | null | undefined>(undefined);
+  const [state, setState] = useState<DocState | null>(null);
+  const [mode, setMode] = useState<ReaderMode>('book');
+  const [percent, setPercent] = useState(0);
+  const [page, setPage] = useState(1);
+  const [active, setActive] = useState<string | null>(null);
+  const [flagsFor, setFlagsFor] = useState<string | null>(null);
+  const [contentsOpen, setContentsOpen] = useState(false);
+  const [typoOpen, setTypoOpen] = useState(false);
+  const reader = useRef<ReaderViewHandle>(null);
+  const pending = useRef<Partial<DocState> | null>(null);
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const requestedBlock = first(params.block);
+  const requestedMode: ReaderMode = first(params.mode) === 'original' ? 'original' : 'book';
+  const requestedPage = first(params.page) ? Number(first(params.page)) : undefined;
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const [d, s] = await Promise.all([library.loadDocument(id), library.getState(id)]);
+      if (cancelled) return;
+      setDoc(d);
+      setState(s);
+      setMode(first(params.mode) ? requestedMode : s.mode);
+      setPercent(s.percent);
+      if (d) void library.markOpened(id);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  const index: DocIndex | null = useMemo(() => (doc ? indexDocument(doc) : null), [doc]);
+
+  const flush = useCallback(() => {
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = null;
+    const patch = pending.current;
+    pending.current = null;
+    if (patch) void library.saveState(id, patch);
+  }, [id, library]);
+
+  const save = useCallback(
+    (patch: Partial<DocState>) => {
+      pending.current = { ...(pending.current ?? {}), ...patch };
+      if (!saveTimer.current) saveTimer.current = setTimeout(flush, 1200);
+    },
+    [flush],
+  );
+  useEffect(() => flush, [flush]);
+
+  const bookmarks = state?.bookmarks ?? [];
+  const bookmarkIds = useMemo(() => bookmarks.map((b) => b.blockId), [bookmarks]);
+
+  const toggleBookmark = (blockId: string) => {
+    if (!state) return;
+    const has = state.bookmarks.some((b) => b.blockId === blockId);
+    const next = has
+      ? state.bookmarks.filter((b) => b.blockId !== blockId)
+      : [...state.bookmarks, { blockId, createdAt: Date.now() }];
+    setState({ ...state, bookmarks: next });
+    void library.saveState(id, { bookmarks: next });
+  };
+
+  const showOriginal = (blockId: string) => {
+    setActive(null);
+    reader.current?.send({ type: 'mode', mode: 'original', blockId });
+  };
+
+  const onEvent = useCallback(
+    (e: ReaderEvent) => {
+      switch (e.type) {
+        case 'progress':
+          setPercent(e.percent);
+          setPage(e.page);
+          save({ percent: Math.round(e.percent * 10) / 10, anchor: { blockId: e.blockId, offset: e.offset } });
+          break;
+        case 'original-tap':
+          setPage(e.page);
+          break;
+        case 'block-tap':
+          setActive(e.blockId);
+          break;
+        case 'selection-clear':
+          setActive(null);
+          break;
+        case 'flags':
+          setFlagsFor(e.blockId);
+          break;
+        case 'link':
+          void Linking.openURL(e.url);
+          break;
+        case 'mode-changed':
+          setMode(e.mode);
+          save({ mode: e.mode });
+          break;
+        case 'log':
+          console.warn('[reader]', e.message);
+          break;
+      }
+    },
+    [save],
+  );
+
+  const strings = useMemo(() => readerStrings(), [useSettings((s) => s.locale)]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (doc === undefined || !state || !index) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: c.bg }}>
+        <ActivityIndicator color={c.accent} />
+      </View>
+    );
+  }
+  if (doc === null) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: c.bg, padding: space.xl, gap: space.lg }}>
+        <AppText variant="heading">{t('reader.notFound')}</AppText>
+        <Button label={t('common.back')} onPress={() => router.replace('/')} />
+      </SafeAreaView>
+    );
+  }
+
+  const activeBlock = active ? index.byId.get(active) ?? null : null;
+  const flagBlock = flagsFor ? index.byId.get(flagsFor) ?? null : null;
+  const total = doc.pages.length;
+  const warn = doc.quality.grade !== 'good';
+  const readerBg = { paper: '#fbfaf7', sepia: '#f4ecd8', dark: '#17181b', black: '#000000' }[settings.theme];
+
+  return (
+    <SafeAreaView style={{ flex: 1, backgroundColor: readerBg }} edges={['top', 'left', 'right']}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, backgroundColor: c.bg }}>
+        <IconButton icon="chevron-back" label={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} testID="reader-back" />
+        <View style={{ flex: 1, paddingHorizontal: space.xs }}>
+          <AppText numberOfLines={1} style={{ fontWeight: '700' }}>
+            {titleOf(doc)}
+          </AppText>
+          <AppText variant="caption" muted testID="reader-position">
+            {t('reader.page', { n: page })} / {total} · %{Math.round(percent)}
+          </AppText>
+        </View>
+        <IconButton icon={warn ? 'warning-outline' : 'analytics-outline'} label={t('reader.report')} onPress={() => router.push(`/report/${id}`)} testID="open-report" />
+        <IconButton icon="list" label={t('reader.contents')} onPress={() => setContentsOpen(true)} testID="open-contents" />
+        <IconButton icon="text" label={t('reader.typography')} onPress={() => setTypoOpen(true)} testID="open-typography" />
+      </View>
+      <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.bg }}>
+        <Segmented
+          value={mode}
+          onChange={(m) => {
+            setMode(m);
+            setActive(null);
+            reader.current?.send({ type: 'mode', mode: m });
+          }}
+          options={[
+            { value: 'book', label: t('reader.book') },
+            { value: 'original', label: t('reader.original') },
+          ]}
+        />
+      </View>
+
+      <View style={{ flex: 1 }}>
+        <ReaderView
+          ref={reader}
+          docId={id}
+          doc={doc}
+          library={library}
+          settings={settings}
+          mode={mode}
+          anchor={state.anchor}
+          bookmarks={bookmarkIds}
+          highlights={[]}
+          strings={strings}
+          focus={requestedBlock ? { blockId: requestedBlock, page: requestedPage } : null}
+          onEvent={onEvent}
+        />
+        {activeBlock && mode === 'book' ? (
+          <BlockActions
+            block={activeBlock}
+            bookmarked={bookmarkIds.includes(activeBlock.id)}
+            onToggleBookmark={() => toggleBookmark(activeBlock.id)}
+            onShowOriginal={() => showOriginal(activeBlock.id)}
+            onClose={() => {
+              setActive(null);
+              reader.current?.send({ type: 'clear-selection' });
+            }}
+          />
+        ) : null}
+      </View>
+      <View style={{ height: 3, backgroundColor: c.bg }}>
+        <ProgressBar value={percent / 100} height={3} />
+      </View>
+
+      <ContentsSheet
+        visible={contentsOpen}
+        onClose={() => setContentsOpen(false)}
+        index={index}
+        bookmarks={bookmarks}
+        onGoto={(blockId) => {
+          setContentsOpen(false);
+          reader.current?.send({ type: 'goto', blockId, flash: true });
+        }}
+        onRemoveBookmark={toggleBookmark}
+      />
+      <Sheet visible={typoOpen} onClose={() => setTypoOpen(false)} title={t('reader.typography')}>
+        <TypographyControls settings={settings} onChange={(patch) => void updateReader(patch)} />
+      </Sheet>
+      <FlagsSheet block={flagBlock} onClose={() => setFlagsFor(null)} onShowOriginal={showOriginal} />
+    </SafeAreaView>
+  );
+}

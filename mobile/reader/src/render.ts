@@ -190,6 +190,9 @@ export function renderBlock(b: Block, ctx: RenderCtx): HTMLElement | null {
 
 export function renderBook(ctx: RenderCtx): HTMLElement {
   const book = el('main', null, { id: 'book' });
+  // a run-in abstract ("Abstract—We study...") has no heading block; its section carries the label
+  const labels = new Map<string, string>();
+  for (const s of ctx.doc.sections) if (s.kind === 'abstract' && s.block_id) labels.set(s.block_id, s.title);
   if (!ctx.doc.blocks.length) {
     book.append(el('div', 'unsupported', null, ctx.strings.empty_unsupported));
     return book;
@@ -198,6 +201,8 @@ export function renderBook(ctx: RenderCtx): HTMLElement {
   for (const b of ctx.doc.blocks) {
     const node = renderBlock(b, ctx);
     if (!node) continue;
+    const label = labels.get(b.id);
+    if (label && b.type === 'paragraph') node.dataset.label = label;
     const page = b.source[0].page;
     if (page !== lastPage && b.type !== 'footnote') {
       book.append(el('div', 'pgsep', { 'data-page': page, 'data-first': b.id }, `${ctx.strings.page} ${page}`));

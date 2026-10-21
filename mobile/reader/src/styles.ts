@@ -30,6 +30,7 @@ h2.h{font-size:1.25em}h3.h{font-size:1.1em}h4.h{font-size:1em;font-style:italic}
   text-transform:uppercase;cursor:pointer;user-select:none}
 .pgsep::before,.pgsep::after{content:'';flex:1;height:1px;background:var(--border)}
 .li{display:flex;gap:.7em;margin-left:.4em}.li .mk{flex:none;min-width:1.1em;color:var(--muted)}.li .lt{flex:1;min-width:0}
+.blk[data-label]::before{content:attr(data-label);display:block;font:700 .66em var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4em}
 a.cite{color:var(--accent);text-decoration:none;border-radius:3px;padding:0 1px}
 a.link{color:var(--accent)}
 .m{font-family:'STIX Two Math','Cambria Math','Times New Roman',serif;font-style:italic}

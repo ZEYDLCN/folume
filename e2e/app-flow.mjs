@@ -1,0 +1,183 @@
+// Full app flow in Chromium: real backend, exported web build, phone viewport.
+import { spawn } from 'node:child_process';
+import { mkdtempSync, readdirSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+import { assert, check, done, here, launch, shots } from './lib.mjs';
+import { serve } from './serve.mjs';
+
+const API = 8765;
+const WEB = 8081;
+const dataDir = mkdtempSync(path.join(tmpdir(), 'folume-e2e-'));
+const python = path.join(here, '../backend/.venv/bin/python');
+const pdf = path.join(here, '../backend/tests/.generated/ieee_ml.pdf');
+const dist = path.join(here, '../mobile/dist');
+
+assert(existsSync(dist), 'run `npm run export:web` in mobile/ first');
+const api = spawn(python, ['-m', 'uvicorn', 'folume.main:app', '--port', String(API)], {
+  cwd: path.join(here, '../backend'),
+  env: { ...process.env, FOLUME_DATA_DIR: dataDir, FOLUME_CORS_ORIGINS: `http://localhost:${WEB}` },
+  stdio: 'ignore',
+});
+const web = await serve(dist, WEB);
+for (let i = 0; i < 60; i++) {
+  try {
+    if ((await fetch(`http://localhost:${API}/v1/health`)).ok) break;
+  } catch { /* not up yet */ }
+  await new Promise((r) => setTimeout(r, 250));
+}
+
+const browser = await launch();
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'tr-TR' });
+const page = await context.newPage();
+const errors = [];
+page.on('pageerror', (e) => errors.push(String(e)));
+page.on('dialog', (d) => d.accept());
+const frame = () => page.frameLocator('[data-testid=reader-frame]');
+const shot = (name) => page.screenshot({ path: path.join(shots, `app-${name}.png`) });
+
+console.log('app flow (web build + real API)');
+await page.goto(`http://localhost:${WEB}/`);
+
+await check('shows the empty library with the product promise', async () => {
+  await page.getByText('İlk makalenle başla').waitFor({ timeout: 15000 });
+  assert(await page.getByText('Her paragraf orijinal PDF konumuna bağlı kalır').count() === 1, 'promise missing');
+  await shot('01-empty-library');
+});
+
+let paperId = '';
+await check('imports a PDF through the picker, converts on the server and opens the reader', async () => {
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('import-button').click()]);
+  await chooser.setFiles(pdf);
+  await page.getByTestId('import-status').waitFor({ timeout: 10000 });
+  await shot('02-importing');
+  await page.waitForURL(/\/reader\//, { timeout: 90000 });
+  paperId = page.url().split('/reader/')[1].split('?')[0];
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  const heading = await frame().locator('#book .h').first().textContent();
+  assert(/INTRODUCTION/i.test(heading), heading);
+  assert((await page.getByTestId('reader-position').textContent()).includes('Sayfa 1 / 3'), 'position label');
+  await shot('03-reader');
+});
+
+await check('the server keeps nothing after the import', async () => {
+  await new Promise((r) => setTimeout(r, 500));
+  assert(readdirSync(dataDir).length === 0, `job directories left: ${readdirSync(dataDir)}`);
+  const caps = await (await fetch(`http://localhost:${API}/v1/capabilities`)).json();
+  assert(caps.uploads_persisted === false, 'uploads_persisted');
+});
+
+await check('images load lazily from local storage into the reader', async () => {
+  await frame().locator('#book .fig img').first().scrollIntoViewIfNeeded();
+  await page.waitForFunction(() => {
+    const f = document.querySelector('[data-testid=reader-frame]');
+    const imgs = [...f.contentDocument.querySelectorAll('#book img')];
+    return imgs.some((i) => i.naturalWidth > 0);
+  }, null, { timeout: 15000 });
+});
+
+await check('contents sheet jumps to a section', async () => {
+  await page.getByTestId('open-contents').click();
+  await page.getByTestId('contents-list').waitFor();
+  await shot('04-contents');
+  await page.getByText('EXPERIMENTS').first().click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+});
+
+await check('changing the theme restyles the reader immediately', async () => {
+  await page.getByTestId('open-typography').click();
+  await page.getByTestId('theme-dark').click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('t-dark'));
+  await shot('05-typography-dark');
+  await page.getByTestId('sheet-close').click();
+  await page.waitForTimeout(500);
+  await shot('06-reader-dark');
+});
+
+await check('tapping a block offers original + bookmark; bookmarks survive a reload', async () => {
+  await frame().locator('#book .blk-paragraph .bt').first().click();
+  await page.getByTestId('block-actions').waitFor();
+  await page.getByTestId('action-bookmark').click();
+  await page.waitForTimeout(300);
+  await page.reload();
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('.blk.bm').length === 1);
+  await page.getByTestId('open-contents').click();
+  await page.getByText(/Yer imleri \(1\)/).click();
+  await shot('07-bookmarks');
+  await page.getByTestId('sheet-close').click();
+});
+
+await check('reading position is restored after leaving and reopening the paper', async () => {
+  await page.getByText('Folume').first().isVisible().catch(() => false);
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+  await page.waitForTimeout(1500); // progress is saved after a short debounce
+  await page.getByTestId('reader-back').click();
+  await page.getByTestId(`paper-${paperId}`).waitFor();
+  const percent = await page.getByTestId(`paper-${paperId}`).textContent();
+  assert(/%\d+ okundu/.test(percent), percent);
+  await shot('08-library-with-progress');
+  await page.getByTestId(`paper-${paperId}`).click();
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+});
+
+await check('Original view shows the source page and returns to the same place', async () => {
+  await page.getByRole('button', { name: 'Orijinal' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('original'));
+  await page.waitForFunction(() => {
+    const d = document.querySelector('[data-testid=reader-frame]').contentDocument;
+    return [...d.querySelectorAll('#orig img')].some((i) => i.naturalWidth > 0);
+  }, null, { timeout: 15000 });
+  await page.waitForTimeout(400);
+  await shot('09-original');
+  await page.getByRole('button', { name: 'Kitap', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('original'));
+});
+
+await check('conversion report explains the ledger and what was left out', async () => {
+  await page.getByTestId('open-report').click();
+  await page.getByTestId('report').waitFor();
+  await page.getByText('İyi').first().waitFor();
+  assert(await page.getByText('Metin defteri').count() === 1, 'ledger section');
+  assert(await page.getByText('Hesaplanamayan').count() === 1, 'unaccounted row');
+  assert(await page.getByText('Sayfa üst bilgisi').count() >= 1, 'omitted header listed');
+  await shot('10-report');
+  await page.getByTestId('screen-back').click();
+});
+
+await check('settings can test the server connection and switch the language', async () => {
+  await page.getByTestId('reader-back').click();
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('test-connection').click();
+  await page.getByTestId('connection-ok').waitFor({ timeout: 10000 });
+  assert((await page.getByTestId('connection-ok').textContent()).includes('0.1.0'), 'version');
+  await shot('11-settings');
+  await page.getByRole('button', { name: 'English' }).click();
+  await page.getByText('Conversion server').waitFor();
+  await page.getByTestId('screen-back').click();
+  await page.getByText('Library').first().waitFor();
+});
+
+await check('a paper can be deleted from the device', async () => {
+  await page.getByTestId(`delete-${paperId}`).click();
+  await page.getByText('Start with your first paper').waitFor({ timeout: 10000 });
+});
+
+await check('an unreachable server gives an actionable error', async () => {
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('server-url').fill('http://localhost:59999');
+  await page.getByTestId('server-url').blur();
+  await page.getByTestId('screen-back').click();
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('import-button').click()]);
+  await chooser.setFiles(pdf);
+  await page.getByTestId('import-error').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('import-error').textContent()).includes('could not be reached'), 'message');
+  await shot('12-import-error');
+});
+
+assert(errors.length === 0, `page errors: ${errors.join(' | ')}`);
+await browser.close();
+web.close();
+api.kill();
+done();
