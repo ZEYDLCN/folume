@@ -501,8 +501,7 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                 if pb.type not in ("title", "authors", "caption") or pb.type in ("title", "authors"):
                     sd = block_style_cleanup(sd)
                 spans = to_model_spans(sd)
-                text = "".join(("_" + s.text if s.math and s.sub else "^" + s.text if s.math and s.sup else s.text)
-                               for s in spans)
+                text = _math_text(spans)
                 if has_garbled(text):
                     flags.append(QualityFlag(code="text_garbled", severity="warning",
                                              message="Some glyphs could not be decoded"))
@@ -517,7 +516,13 @@ def _to_model(flow: list[PBlock], streams: list[PageStream], renderer: Renderer,
                 marker = re.match(r"^\s*(\d{1,2}|[*†‡§¶])\s*", text)
                 if marker and len(text) > marker.end():
                     number = marker.group(1)
-                    spans, text, prefix = _strip_prefix(spans, re.compile(r"^\s*(?:\d{1,2}|[*†‡§¶])\s*"))
+                    spans, _, prefix = _strip_prefix(spans, re.compile(r"^\s*(?:\d{1,2}|[*†‡§¶])\s*"))
+                    text = _math_text(spans)
+            if pb.type == "list_item" and number and len(text) > len(number):
+                # the marker is shown in front of the item by the reader: keep it out of the text, in the prefix
+                cut_spans, cut_text, cut = _strip_prefix(spans, re.compile(r"^\s*" + re.escape(number) + r"\s*"))
+                if cut and cut_text.strip():
+                    spans, text, prefix = cut_spans, _math_text(cut_spans), cut
             if pb.type == "reference":
                 confidence = 0.9
 
@@ -625,6 +630,11 @@ def _recover_unplaced(pages, blocks: list[Block]) -> list[Block]:
         at = max((i for i, b in enumerate(out) if b.source[0].page <= p.number), default=-1) + 1
         out.insert(at, block)
     return out
+
+
+def _math_text(spans: list[Span]) -> str:
+    """Block text of a span list: sub- and superscript math carries a `_` or `^` marker, like everywhere else."""
+    return "".join(("_" + s.text if s.math and s.sub else "^" + s.text if s.math and s.sup else s.text) for s in spans)
 
 
 def _strip_prefix(spans: list[Span], pattern: re.Pattern) -> tuple[list[Span], str, str]:

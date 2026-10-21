@@ -38,4 +38,4 @@ corpus: ## Generate the synthetic PDFs the end-to-end scripts read
 e2e: corpus ## Build the web app and run the browser end-to-end scenarios (needs Chromium)
 	cd backend && for n in ieee_ml acm_graph; do .venv/bin/python -m folume.tools.export_bundle tests/.generated/$$n.pdf ../e2e/out/$$n || exit 1; done
 	cd mobile && npm run build:reader && EXPO_PUBLIC_API_URL=http://localhost:8765 CI=1 npx expo export --platform web
-	cd e2e && for f in reader-runtime formats app-flow learn-flow knowledge-flow link-flow; do node $$f.mjs || exit 1; done
+	cd e2e && for f in reader-runtime formats app-flow learn-flow knowledge-flow link-flow export-flow; do node $$f.mjs || exit 1; done

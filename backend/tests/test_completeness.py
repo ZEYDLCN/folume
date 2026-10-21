@@ -154,6 +154,16 @@ def test_removed_text_strips_the_prefix_but_not_the_letters(corpus):
     assert all(letters(b.number) <= letters(b.prefix) for b in headings)
 
 
+def test_a_list_marker_is_kept_out_of_the_item_text_but_not_lost(corpus):
+    """The reader draws the marker itself, so the text must not start with it a second time."""
+    items = [b for b in corpus["ieee_ml"].doc.blocks if b.type == "list_item"]
+    assert items
+    for b in items:
+        assert b.number and b.prefix == b.number, (b.id, b.number, b.prefix)
+        assert not b.text.startswith(b.number) and b.text.strip(), b.text[:30]
+        assert b.spans and "".join(s.text for s in b.spans) == b.text.replace("_", "").replace("^", "")
+
+
 # ------------------------------------------------------------------------------- damage is detected, not hidden
 
 

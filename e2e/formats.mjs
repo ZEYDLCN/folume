@@ -33,6 +33,19 @@ await check('every format shows exactly the text of the document, block by block
   assert(new Set(reference.values()).size === 1, 'the four format combinations render identical block text');
 });
 
+await check('a list item draws its marker once, and a paper converted before that fix does not show it twice', async () => {
+  const r = await openReader(browser, bundle, {}, PHONE);
+  const items = await r.page.evaluate(() => [...document.querySelectorAll('#book .li')].map((n) => n.innerText.replace(/\s+/g, ' ').trim()));
+  assert(items.length === 3 && items.every((t) => /^• [A-Za-z]/.test(t)), JSON.stringify(items));
+  await r.close();
+  const old = JSON.parse(JSON.stringify(doc));
+  for (const b of old.blocks) if (b.type === 'list_item') { b.text = `${b.number} ${b.text}`; b.spans = [{ ...b.spans[0], text: b.text }]; b.prefix = null; }
+  const r2 = await openReader(browser, { ...bundle, doc: old }, {}, PHONE);
+  const oldItems = await r2.page.evaluate(() => [...document.querySelectorAll('#book .li')].map((n) => n.innerText.replace(/\s+/g, ' ').trim()));
+  assert(oldItems.every((t) => /^• [A-Za-z]/.test(t)), JSON.stringify(oldItems));
+  await r2.close();
+});
+
 await check('Magazine: a masthead, section kickers, drop caps, and columns when there is room', async () => {
   const wide = await openReader(browser, bundle, { settings: { layout: 'magazine' } }, TABLET);
   const facts = await wide.page.evaluate(() => {

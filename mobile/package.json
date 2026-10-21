@@ -30,14 +30,17 @@
   "devDependencies": {
     "@react-native/jest-preset": "^0.88.0",
     "@types/jest": "^30.0.0",
+    "@types/markdown-it": "14.1.2",
     "@types/node": "^22.20.5",
     "@types/react": "~19.3.0",
+    "@xmldom/xmldom": "0.8.15",
     "ajv": "^8.20.0",
     "babel-preset-expo": "^58.0.18",
     "esbuild": "^0.28.2",
     "jest": "^30.5.2",
     "jest-expo": "~58.0.11",
     "json-schema-to-typescript": "^15.0.0",
+    "markdown-it": "14.1.0",
     "react-server-dom-webpack": "19.3.0",
     "typescript": "~6.0.3"
   },

@@ -140,7 +140,10 @@ export function renderBlock(b: Block, ctx: RenderCtx): HTMLElement | null {
     }
     case 'list_item': {
       const li = base(b, 'div', 'li');
-      li.append(el('span', 'mk', null, b.number ?? '•'), textBox(b, 'div'));
+      // the marker is drawn here; a paper converted earlier still has it at the start of the text, so it is not drawn twice
+      const own = !b.prefix && !!b.number && b.text.startsWith(b.number);
+      if (!own) li.append(el('span', 'mk', null, b.prefix || b.number || '•'));
+      li.append(textBox(b, 'div'));
       li.lastElementChild?.classList.add('lt');
       return decorate(li, b, ctx);
     }

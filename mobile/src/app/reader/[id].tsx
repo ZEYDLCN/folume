@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { safeExternalUrl } from '@/core/links';
@@ -11,6 +11,7 @@ import { HIGHLIGHT_COLORS, toHighlightViews, type Annotation } from '@/data/anno
 import { LearnSheet, type LearnTarget } from '@/features/learn/LearnSheet';
 import { BlockActions } from '@/features/reader/BlockActions';
 import { ContentsSheet } from '@/features/reader/ContentsSheet';
+import { ExportSheet } from '@/features/reader/ExportSheet';
 import { FlagsSheet } from '@/features/reader/FlagsSheet';
 import { NoteSheet } from '@/features/reader/NoteSheet';
 import { SelectionBar } from '@/features/reader/SelectionBar';
@@ -49,6 +50,7 @@ export default function ReaderScreen() {
   const [flagsFor, setFlagsFor] = useState<string | null>(null);
   const [contentsOpen, setContentsOpen] = useState(false);
   const [typoOpen, setTypoOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selection, setSelection] = useState<{ blockId: string; start: number; end: number; text: string } | null>(null);
   const [color, setColor] = useState<string>(HIGHLIGHT_COLORS[0].value);
@@ -99,6 +101,23 @@ export default function ReaderScreen() {
     [flush],
   );
   useEffect(() => flush, [flush]);
+  // progress is saved a moment after the last move; leaving the app, a tab or the page must not lose that moment
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (s) => s !== 'active' && flush());
+    const onHide = () => flush();
+    const onVisibility = () => document.visibilityState === 'hidden' && flush();
+    if (Platform.OS === 'web') {
+      window.addEventListener('pagehide', onHide);
+      document.addEventListener('visibilitychange', onVisibility);
+    }
+    return () => {
+      sub.remove();
+      if (Platform.OS === 'web') {
+        window.removeEventListener('pagehide', onHide);
+        document.removeEventListener('visibilitychange', onVisibility);
+      }
+    };
+  }, [flush]);
 
   const bookmarks = state?.bookmarks ?? [];
   const bookmarkIds = useMemo(() => bookmarks.map((b) => b.blockId), [bookmarks]);
@@ -220,6 +239,7 @@ export default function ReaderScreen() {
         <IconButton icon={warn ? 'warning-outline' : 'analytics-outline'} label={t('reader.report')} onPress={() => router.push(`/report/${id}`)} testID="open-report" />
         <IconButton icon="list" label={t('reader.contents')} onPress={() => setContentsOpen(true)} testID="open-contents" />
         <IconButton icon="text" label={t('reader.typography')} onPress={() => setTypoOpen(true)} testID="open-typography" />
+        <IconButton icon="share-outline" label={t('reader.export')} onPress={() => setExportOpen(true)} testID="open-export" />
       </View>
       <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.bg }}>
         <Segmented<'book' | 'magazine' | 'original'>
@@ -313,6 +333,7 @@ export default function ReaderScreen() {
       <Sheet visible={typoOpen} onClose={() => setTypoOpen(false)} title={t('reader.typography')}>
         <TypographyControls settings={settings} onChange={(patch) => void updateReader(patch)} />
       </Sheet>
+      <ExportSheet visible={exportOpen} onClose={() => setExportOpen(false)} doc={doc} docId={id} library={library} settings={settings} />
       <LearnSheet
         visible={learnOpen}
         onClose={() => setLearnOpen(false)}

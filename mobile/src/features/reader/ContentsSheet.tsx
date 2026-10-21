@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { flattenOutline, outline, type DocIndex } from '@/core/docModel';
@@ -25,6 +25,9 @@ export function ContentsSheet({
   const t = useT();
   const c = useColors();
   const [tab, setTab] = useState<'contents' | 'bookmarks'>('contents');
+  useEffect(() => {
+    if (visible) setTab('contents'); // it opens on the contents, whichever tab was used last
+  }, [visible]);
   const items = flattenOutline(outline(index.doc));
   return (
     <Sheet visible={visible} onClose={onClose} title={tab === 'contents' ? t('reader.contents') : t('reader.bookmarks')}>

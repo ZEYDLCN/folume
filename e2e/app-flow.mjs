@@ -109,7 +109,13 @@ await check('tapping a block offers original + bookmark; bookmarks survive a rel
 });
 
 await check('reading position is restored after leaving and reopening the paper', async () => {
-  await page.getByText('Folume').first().isVisible().catch(() => false);
+  // move to a section and reload at once: the position has to be saved when the page goes away, not only after a pause
+  await page.getByTestId('open-contents').click();
+  await page.getByTestId('contents-list').waitFor();
+  await page.getByText('EXPERIMENTS').first().click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+  await page.reload();
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
   await page.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
   await page.waitForTimeout(1500); // progress is saved after a short debounce
   await page.getByTestId('reader-back').click();
