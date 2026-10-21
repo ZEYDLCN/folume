@@ -468,6 +468,23 @@ export const tr = {
   'typo.flow.scroll': 'Kaydır',
   'typo.flow.paged': 'Sayfa sayfa',
   'typo.flow.hint': 'Sayfa sayfa okurken ekranın kenarlarına dokunun, kaydırın ya da ok tuşlarını kullanın.',
+  // ---- makale içinde bul, odak modu, kalan süre
+  'reader.more': 'Daha fazla',
+  'reader.find': 'Makalede bul',
+  'find.placeholder': 'Bu makalede bul',
+  'find.count': '{i} / {n}',
+  'find.capped': '{i} / {n}+',
+  'find.none': 'Eşleşme yok',
+  'find.removed': 'Yalnızca bir üst ya da alt bilgide (sayfa {n})',
+  'find.prev': 'Önceki eşleşme',
+  'find.next': 'Sonraki eşleşme',
+  'find.close': 'Aramayı kapat',
+  'reader.focus': 'Odak modu',
+  'reader.focus.exit': 'Kontrolleri göster',
+  'reader.left': '{n} dk kaldı',
+  'reader.left.done': 'Bitti',
+  'library.continue': 'Okumaya devam et',
+
   // ---- makaleyi başka bir biçime dönüştür / dışa aktar
   'reader.export': 'Dönüştür ve paylaş',
   'export.title': 'Bu makaleyi dönüştür',

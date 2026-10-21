@@ -2,20 +2,21 @@
 
 from __future__ import annotations
 
-from collections import Counter
 from statistics import median
 
 from .types import Char, Fragment, RawPage, union
 
 
 def dominant_size(chars: list[Char]) -> float:
-    counts: Counter[float] = Counter()
+    counts: dict[float, int] = {}
     for c in chars:
         if not c.text.isspace():
-            counts[round(c.size, 1)] += 1
+            key = round(c.size, 1)
+            counts[key] = counts.get(key, 0) + 1
     if not counts:
         return chars[0].size if chars else 10.0
-    return counts.most_common(1)[0][0]
+    # the most common size; on a tie the one met first (what Counter.most_common does)
+    return max(counts.items(), key=lambda kv: kv[1])[0]
 
 
 def _bucket_by_baseline(chars: list[Char]) -> list[list[Char]]:
@@ -105,7 +106,8 @@ def build_fragments(page: RawPage) -> tuple[list[Fragment], list[Char]]:
     buckets = _attach_scripts(_bucket_by_baseline(upright))
     fragments: list[Fragment] = []
     for b in buckets:
-        main_chars = [c for c in b if c.size >= 0.9 * dominant_size(b)] or b
+        main = 0.9 * dominant_size(b)
+        main_chars = [c for c in b if c.size >= main] or b
         baseline = median(c.baseline for c in main_chars)
         fragments += split_fragments(b, baseline, page.number)
     fragments.sort(key=lambda f: (round(f.baseline, 1), f.x0))

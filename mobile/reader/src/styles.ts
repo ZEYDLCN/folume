@@ -41,6 +41,7 @@ code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em}
 pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;overflow-x:auto;line-height:1.45;white-space:pre}
 mark.hl{color:inherit;border-radius:2px;padding:0}
 mark.hl.note{border-bottom:2px solid var(--accent)}
+mark.hl[data-h^="find:"]{color:#1c1b19}
 .fig,.tbl{margin:1.1em 0}
 .imgwrap{position:relative;border-radius:8px;overflow:hidden;background:#fff;border:1px solid var(--border);cursor:zoom-in}
 .imgwrap img{display:block;width:100%;height:auto}

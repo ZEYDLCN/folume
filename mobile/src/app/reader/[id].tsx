@@ -1,10 +1,11 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, AppState, Linking, Platform, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { safeExternalUrl } from '@/core/links';
-import { indexDocument, titleOf, type DocIndex } from '@/core/docModel';
+import { indexDocument, readingMinutes, titleOf, type DocIndex } from '@/core/docModel';
+import type { FindHit } from '@/core/find';
 import type { Document } from '@/core/types';
 import type { DocState } from '@/data/library';
 import { HIGHLIGHT_COLORS, toHighlightViews, type Annotation } from '@/data/annotations';
@@ -12,16 +13,18 @@ import { LearnSheet, type LearnTarget } from '@/features/learn/LearnSheet';
 import { BlockActions } from '@/features/reader/BlockActions';
 import { ContentsSheet } from '@/features/reader/ContentsSheet';
 import { ExportSheet } from '@/features/reader/ExportSheet';
+import { FindBar } from '@/features/reader/FindBar';
 import { FlagsSheet } from '@/features/reader/FlagsSheet';
 import { NoteSheet } from '@/features/reader/NoteSheet';
 import { SelectionBar } from '@/features/reader/SelectionBar';
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { ReaderEvent, ReaderMode } from '@/reader/protocol';
+import type { HighlightView } from '@/reader/protocol';
 import { ReaderView, type ReaderViewHandle } from '@/reader/ReaderView';
 import { readerStrings } from '@/reader/strings';
 import { getStores } from '@/services/container';
 import { useSettings, useLocale } from '@/state/settings';
-import { AppText, Button, IconButton, ProgressBar, Segmented, Sheet } from '@/ui/components';
+import { AppText, Button, IconButton, ProgressBar, Segmented, Sheet, type IconName } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
@@ -51,6 +54,10 @@ export default function ReaderScreen() {
   const [contentsOpen, setContentsOpen] = useState(false);
   const [typoOpen, setTypoOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [finding, setFinding] = useState(false);
+  const [found, setFound] = useState<FindHit | null>(null);
+  const [focusMode, setFocusMode] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selection, setSelection] = useState<{ blockId: string; start: number; end: number; text: string } | null>(null);
   const [color, setColor] = useState<string>(HIGHLIGHT_COLORS[0].value);
@@ -85,27 +92,27 @@ export default function ReaderScreen() {
 
   const index: DocIndex | null = useMemo(() => (doc ? indexDocument(doc) : null), [doc]);
 
-  const flush = useCallback(() => {
+  const flush = useCallback((): Promise<unknown> => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = null;
     const patch = pending.current;
     pending.current = null;
-    if (patch) void library.saveState(id, patch);
+    return patch ? library.saveState(id, patch) : Promise.resolve();
   }, [id, library]);
 
   const save = useCallback(
     (patch: Partial<DocState>) => {
       pending.current = { ...(pending.current ?? {}), ...patch };
-      if (!saveTimer.current) saveTimer.current = setTimeout(flush, 1200);
+      if (!saveTimer.current) saveTimer.current = setTimeout(() => void flush(), 1200);
     },
     [flush],
   );
-  useEffect(() => flush, [flush]);
+  useEffect(() => () => void flush(), [flush]);
   // progress is saved a moment after the last move; leaving the app, a tab or the page must not lose that moment
   useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => s !== 'active' && flush());
-    const onHide = () => flush();
-    const onVisibility = () => document.visibilityState === 'hidden' && flush();
+    const sub = AppState.addEventListener('change', (s) => s !== 'active' && void flush());
+    const onHide = () => void flush();
+    const onVisibility = () => document.visibilityState === 'hidden' && void flush();
     if (Platform.OS === 'web') {
       window.addEventListener('pagehide', onHide);
       document.addEventListener('visibilitychange', onVisibility);
@@ -121,7 +128,26 @@ export default function ReaderScreen() {
 
   const bookmarks = state?.bookmarks ?? [];
   const bookmarkIds = useMemo(() => bookmarks.map((b) => b.blockId), [bookmarks]);
-  const highlights = useMemo(() => toHighlightViews(annotations), [annotations]);
+  const highlights = useMemo(() => {
+    const views = toHighlightViews(annotations);
+    // the match being looked at is painted like a highlight, but belongs to no note
+    if (finding && found?.range) {
+      const mark: HighlightView = { id: 'find:hit', blockId: found.blockId, start: found.range.start, end: found.range.end, color: '#ffc933', hasNote: false };
+      views.push(mark);
+    }
+    return views;
+  }, [annotations, finding, found]);
+
+  const onFound = useCallback((hit: FindHit | null) => {
+    setFound(hit);
+    if (!hit) return;
+    if (hit.removed) reader.current?.send({ type: 'goto-page', page: hit.page });
+    else reader.current?.send({ type: 'goto', blockId: hit.blockId, flash: !hit.range });
+  }, []);
+  const closeFind = useCallback(() => {
+    setFinding(false);
+    setFound(null);
+  }, []);
 
   const addAnnotation = async (sel: { blockId: string; start: number; end: number; text: string }, note: string, chosen: string) => {
     const block = index?.byId.get(sel.blockId);
@@ -178,7 +204,7 @@ export default function ReaderScreen() {
           router.push(`/quiz/${id}?section=${e.sectionId}`);
           break;
         case 'highlight-tap':
-          setNoteFor({ mode: 'edit', id: e.id });
+          if (!e.id.startsWith('find:')) setNoteFor({ mode: 'edit', id: e.id });
           break;
         case 'flags':
           setFlagsFor(e.blockId);
@@ -222,48 +248,55 @@ export default function ReaderScreen() {
   const flagBlock = flagsFor ? index.byId.get(flagsFor) ?? null : null;
   const total = doc.pages.length;
   const warn = doc.quality.grade !== 'good';
+  const minutesLeft = Math.ceil(readingMinutes(doc) * (1 - percent / 100));
   const readerBg = { paper: '#fbfaf7', sepia: '#f4ecd8', dark: '#17181b', black: '#000000' }[settings.theme];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: readerBg }} edges={['top', 'left', 'right']}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, backgroundColor: c.bg }}>
-        <IconButton icon="chevron-back" label={t('common.back')} onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))} testID="reader-back" />
-        <View style={{ flex: 1, paddingHorizontal: space.xs }}>
-          <AppText numberOfLines={1} style={{ fontWeight: '700' }}>
-            {titleOf(doc)}
-          </AppText>
-          <AppText variant="caption" muted testID="reader-position">
-            {screen && mode === 'book' ? t('reader.screen', { i: screen.index, n: screen.count }) : `${t('reader.page', { n: page })} / ${total}`} · {t('reader.percent', { n: Math.round(percent) })}
-          </AppText>
-        </View>
-        <IconButton icon={warn ? 'warning-outline' : 'analytics-outline'} label={t('reader.report')} onPress={() => router.push(`/report/${id}`)} testID="open-report" />
-        <IconButton icon="list" label={t('reader.contents')} onPress={() => setContentsOpen(true)} testID="open-contents" />
-        <IconButton icon="text" label={t('reader.typography')} onPress={() => setTypoOpen(true)} testID="open-typography" />
-        <IconButton icon="share-outline" label={t('reader.export')} onPress={() => setExportOpen(true)} testID="open-export" />
-      </View>
-      <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.bg }}>
-        <Segmented<'book' | 'magazine' | 'original'>
-          value={mode === 'original' ? 'original' : settings.layout}
-          onChange={(choice) => {
-            setActive(null);
-            if (choice === 'original') {
-              setMode('original');
-              reader.current?.send({ type: 'mode', mode: 'original' });
-              return;
-            }
-            void updateReader({ layout: choice });
-            if (mode === 'original') {
-              setMode('book');
-              reader.current?.send({ type: 'mode', mode: 'book' });
-            }
-          }}
-          options={[
-            { value: 'book', label: t('reader.book') },
-            { value: 'magazine', label: t('reader.magazine') },
-            { value: 'original', label: t('reader.original') },
-          ]}
-        />
-      </View>
+      {!focusMode ? (
+        <>
+          <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm, backgroundColor: c.bg }}>
+            <IconButton icon="chevron-back" label={t('common.back')} onPress={() => void flush().finally(() => (router.canGoBack() ? router.back() : router.replace('/')))} testID="reader-back" />
+            <View style={{ flex: 1, paddingHorizontal: space.xs }}>
+              <AppText numberOfLines={1} style={{ fontWeight: '700' }}>
+                {titleOf(doc)}
+              </AppText>
+              <AppText variant="caption" muted numberOfLines={1} testID="reader-position">
+                {screen && mode === 'book' ? t('reader.screen', { i: screen.index, n: screen.count }) : `${t('reader.page', { n: page })} / ${total}`} · {minutesLeft > 0 ? t('reader.left', { n: minutesLeft }) : t('reader.left.done')}
+              </AppText>
+            </View>
+            {mode === 'book' ? <IconButton icon="search" label={t('reader.find')} onPress={() => setFinding(true)} testID="open-find" /> : null}
+            <IconButton icon="list" label={t('reader.contents')} onPress={() => setContentsOpen(true)} testID="open-contents" />
+            <IconButton icon="text" label={t('reader.typography')} onPress={() => setTypoOpen(true)} testID="open-typography" />
+            <IconButton icon="ellipsis-horizontal" label={t('reader.more')} onPress={() => setMoreOpen(true)} testID="open-more" />
+          </View>
+          {finding && mode === 'book' ? <FindBar doc={doc} onHit={onFound} onClose={closeFind} /> : null}
+          <View style={{ paddingHorizontal: space.lg, paddingBottom: space.sm, backgroundColor: c.bg }}>
+            <Segmented<'book' | 'magazine' | 'original'>
+              value={mode === 'original' ? 'original' : settings.layout}
+              onChange={(choice) => {
+                setActive(null);
+                if (choice === 'original') {
+                  closeFind();
+                  setMode('original');
+                  reader.current?.send({ type: 'mode', mode: 'original' });
+                  return;
+                }
+                void updateReader({ layout: choice });
+                if (mode === 'original') {
+                  setMode('book');
+                  reader.current?.send({ type: 'mode', mode: 'book' });
+                }
+              }}
+              options={[
+                { value: 'book', label: t('reader.book') },
+                { value: 'magazine', label: t('reader.magazine') },
+                { value: 'original', label: t('reader.original') },
+              ]}
+            />
+          </View>
+        </>
+      ) : null}
 
       <View style={{ flex: 1 }}>
         <ReaderView
@@ -315,6 +348,19 @@ export default function ReaderScreen() {
           />
         ) : null}
       </View>
+      {focusMode ? (
+        <Pressable
+          accessibilityRole="button"
+          accessibilityLabel={t('reader.focus.exit')}
+          onPress={() => setFocusMode(false)}
+          testID="focus-exit"
+          style={{ position: 'absolute', top: 6, right: 10, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999, backgroundColor: 'rgba(29,36,51,0.82)' }}
+        >
+          <AppText variant="caption" color="#fff" testID="focus-position">
+            {Math.round(percent)}% · {minutesLeft > 0 ? t('reader.left', { n: minutesLeft }) : t('reader.left.done')}
+          </AppText>
+        </Pressable>
+      ) : null}
       <View style={{ height: 3, backgroundColor: c.bg }}>
         <ProgressBar value={percent / 100} height={3} />
       </View>
@@ -332,6 +378,31 @@ export default function ReaderScreen() {
       />
       <Sheet visible={typoOpen} onClose={() => setTypoOpen(false)} title={t('reader.typography')}>
         <TypographyControls settings={settings} onChange={(patch) => void updateReader(patch)} />
+      </Sheet>
+      <Sheet visible={moreOpen} onClose={() => setMoreOpen(false)} title={t('reader.more')}>
+        <View testID="more-sheet" style={{ gap: space.xs }}>
+          {(
+            [
+              ['report', warn ? 'warning-outline' : 'analytics-outline', t('reader.report'), () => router.push(`/report/${id}`)],
+              ['export', 'share-outline', t('reader.export'), () => setExportOpen(true)],
+              ['focus', 'expand-outline', t('reader.focus'), () => setFocusMode(true)],
+            ] as [string, IconName, string, () => void][]
+          ).map(([key, icon, label, run]) => (
+            <Pressable
+              key={key}
+              accessibilityRole="button"
+              testID={`more-${key}`}
+              onPress={() => {
+                setMoreOpen(false);
+                run();
+              }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 12 }}
+            >
+              <IconButton icon={icon} label={label} onPress={() => undefined} />
+              <AppText style={{ flex: 1, fontSize: 16 }}>{label}</AppText>
+            </Pressable>
+          ))}
+        </View>
       </Sheet>
       <ExportSheet visible={exportOpen} onClose={() => setExportOpen(false)} doc={doc} docId={id} library={library} settings={settings} />
       <LearnSheet

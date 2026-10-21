@@ -51,7 +51,8 @@ await page.waitForURL(/\/reader\//, { timeout: 90000 });
 await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
 
 const openSheet = async () => {
-  await page.getByTestId('open-export').click();
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-export').click();
   await page.getByTestId('export-sheet').waitFor();
 };
 const sheet = () => page.getByTestId('export-sheet');

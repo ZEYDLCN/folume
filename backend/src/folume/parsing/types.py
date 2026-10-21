@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from functools import cached_property
 
 Bbox = tuple[float, float, float, float]  # x0, top, x1, bottom (PDF points, top-left origin)
 
@@ -80,8 +81,9 @@ class Fragment:
     column: int = -1  # assigned later: -1 unknown, 0 left, 1 right, 2 spanning
     kind: str = "text"  # text | omitted
 
-    @property
+    @cached_property
     def text(self) -> str:
+        # a fragment's characters never change after it is built, so its text is worked out once
         return fragment_text(self.chars)
 
     @property

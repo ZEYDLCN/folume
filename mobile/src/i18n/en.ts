@@ -459,6 +459,23 @@ export const en: Record<StringKey, string> = {
   'typo.flow.scroll': 'Scroll',
   'typo.flow.paged': 'Page by page',
   'typo.flow.hint': 'Page by page: tap the edges of the screen, swipe, or use the arrow keys.',
+  // ---- find in the paper, focus mode, time left
+  'reader.more': 'More',
+  'reader.find': 'Find in paper',
+  'find.placeholder': 'Find in this paper',
+  'find.count': '{i} of {n}',
+  'find.capped': '{i} of {n}+',
+  'find.none': 'No match',
+  'find.removed': 'Only in a page header or footer (page {n})',
+  'find.prev': 'Previous match',
+  'find.next': 'Next match',
+  'find.close': 'Close find',
+  'reader.focus': 'Focus mode',
+  'reader.focus.exit': 'Show controls',
+  'reader.left': '{n} min left',
+  'reader.left.done': 'Finished',
+  'library.continue': 'Continue reading',
+
   // ---- convert / export the paper to another format
   'reader.export': 'Convert and share',
   'export.title': 'Convert this paper',

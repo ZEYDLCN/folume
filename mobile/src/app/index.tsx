@@ -3,6 +3,7 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { pickContinue } from '@/core/continueReading';
 import { LibraryCard } from '@/features/library/LibraryCard';
 import { LinkSheet } from '@/features/library/LinkSheet';
 import { TagsSheet } from '@/features/library/TagsSheet';
@@ -12,7 +13,7 @@ import { getKnowledge, getStores } from '@/services/container';
 import { pickPdf } from '@/services/picker';
 import type { PdfSource } from '@/services/importer';
 import { useImport } from '@/services/useImport';
-import { AppText, Button, Card, IconButton } from '@/ui/components';
+import { AppText, Button, Card, IconButton, ProgressBar } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
@@ -76,6 +77,9 @@ export default function LibraryScreen() {
   const allTags = useMemo(() => [...new Set((entries ?? []).flatMap((e) => e.tags))].sort((a, b) => a.localeCompare(b)), [entries]);
   // a filter whose tag no longer exists must not leave the library looking empty
   const activeTag = tagFilter && allTags.includes(tagFilter) ? tagFilter : null;
+
+  // offered above the list while the library is not filtered, and only when there is more than one paper to choose from
+  const resume = useMemo(() => (entries && entries.length > 1 && !query.trim() && !activeTag ? pickContinue(entries) : null), [entries, query, activeTag]);
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -147,6 +151,29 @@ export default function LibraryScreen() {
 
         <FlatList
           data={shown}
+          ListHeaderComponent={
+            resume ? (
+              <Pressable
+                onPress={() => router.push(`/reader/${resume.id}`)}
+                accessibilityRole="button"
+                accessibilityLabel={`${t('library.continue')}: ${resume.title}`}
+                testID="continue-card"
+              >
+                <Card style={{ gap: space.sm, borderColor: c.accent, marginBottom: space.xs }}>
+                  <AppText variant="label" color={c.accent}>
+                    {t('library.continue')}
+                  </AppText>
+                  <AppText variant="heading" numberOfLines={2}>
+                    {resume.title}
+                  </AppText>
+                  <ProgressBar value={resume.percent / 100} />
+                  <AppText variant="caption" muted>
+                    {t('library.progress', { n: Math.round(resume.percent) })}
+                  </AppText>
+                </Card>
+              </Pressable>
+            ) : undefined
+          }
           keyExtractor={(e) => e.id}
           contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: 120, flexGrow: 1 }}
           renderItem={({ item }) => (

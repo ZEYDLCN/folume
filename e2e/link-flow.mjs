@@ -110,7 +110,8 @@ await check('a link to a PDF is downloaded by the server, converted and opened',
 });
 
 await check('the report says every letter is there, and the library knows there is no stored original', async () => {
-  await page.getByTestId('open-report').click();
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-report').click();
   await page.getByTestId('completeness').waitFor();
   assert(/All [\d,]+ letters and digits of the PDF text layer are in this document/.test(await page.getByTestId('completeness').textContent()), 'completeness verdict');
   await page.getByTestId('screen-back').click();

@@ -1,6 +1,6 @@
 // Reading formats of the reader runtime: Book, Magazine, paged flow. Real Chromium, real backend output.
 import path from 'node:path';
-import { assert, check, done, launch, loadBundle, openReader, shots } from './lib.mjs';
+import { assert, check, done, inflate, launch, loadBundle, openReader, shots, timeOpen } from './lib.mjs';
 
 const browser = await launch();
 const bundle = loadBundle('ieee_ml');
@@ -191,6 +191,17 @@ await check('Selecting text still works on a paged screen', async () => {
   const e = await r.waitFor(async () => (await r.events()).find((x) => x.type === 'selection'), 'selection event');
   assert(e.text.length === 30 && e.start === 0 && e.end === 30, JSON.stringify(e));
   await r.close();
+});
+
+await check('a 90-page paper (1,700 blocks) shows its first screen and jumps to the end quickly, in every flow', async () => {
+  const big = inflate(doc, 30);
+  for (const flow of ['scroll', 'paged']) {
+    const t = await timeOpen(browser, big, { flow });
+    console.log(`      ${t.blocks} blocks, ${flow}: first position after ${t.first} ms, jump to the end ${t.jump} ms, ${t.nodes} nodes`);
+    // about ten times what a laptop needs, so a slow machine passes and an accidental O(n^2) does not
+    assert(t.first < 2500, `${flow}: first position took ${t.first} ms`);
+    assert(t.jump < 1500, `${flow}: jump took ${t.jump} ms`);
+  }
 });
 
 await check('Original view is untouched by the paged flow', async () => {

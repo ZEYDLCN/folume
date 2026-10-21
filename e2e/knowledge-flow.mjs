@@ -110,6 +110,27 @@ await check('device A imports two related papers', async () => {
   await A.shot('01-library');
 });
 
+await check('the library offers to continue the paper you were in the middle of', async () => {
+  const p = A.page;
+  assert((await p.getByTestId('continue-card').count()) === 0, 'nothing to continue before reading');
+  await p.getByTestId(`paper-${ieee}`).click();
+  await A.frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await p.getByTestId('open-contents').click();
+  await p.getByTestId('contents-list').waitFor();
+  await p.getByText('EXPERIMENTS').first().click();
+  await p.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+  await p.getByTestId('reader-back').click();
+  await p.getByTestId('continue-card').waitFor({ timeout: 10000 });
+  const text = await p.getByTestId('continue-card').textContent();
+  assert(/Continue reading/.test(text) && /Sparse Routing/.test(text) && /\d+% read/.test(text), text);
+  await A.shot('01b-continue');
+  await p.getByTestId('continue-card').click();
+  await A.frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await p.waitForFunction(() => document.querySelector('[data-testid=reader-position]')?.textContent?.includes('2 / 3'), null, { timeout: 10000 });
+  await p.getByTestId('reader-back').click();
+  await p.getByTestId(`paper-${ieee}`).waitFor();
+});
+
 await check('tags label papers and filter the library', async () => {
   const p = A.page;
   await p.getByTestId(`tags-${ieee}`).click();

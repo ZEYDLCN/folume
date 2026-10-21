@@ -94,6 +94,40 @@ await check('changing the theme restyles the reader immediately', async () => {
   await shot('06-reader-dark');
 });
 
+await check('find in paper: counts matches, steps through them and paints the one you are on', async () => {
+  await page.getByTestId('open-find').click();
+  await page.getByTestId('find-input').fill('expert gating');
+  await page.waitForFunction(() => /^1 \/ \d+$/.test(document.querySelector('[data-testid=find-count]')?.textContent ?? ''), null, { timeout: 5000 });
+  const count = Number((await page.getByTestId('find-count').textContent()).split('/')[1]);
+  assert(count >= 5, `matches ${count}`);
+  const painted = () => frame().locator('mark.hl').evaluateAll((marks) => marks.map((m) => m.textContent));
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('mark.hl').length >= 1);
+  assert((await painted()).every((t) => t.toLowerCase() === 'expert gating'), JSON.stringify(await painted()));
+  await shot('find-1');
+  await page.getByTestId('find-next').click();
+  await page.waitForFunction(() => /^2 \//.test(document.querySelector('[data-testid=find-count]')?.textContent ?? ''));
+  await page.getByTestId('find-prev').click();
+  await page.getByTestId('find-prev').click(); // wraps around to the last match
+  await page.waitForFunction((n) => document.querySelector('[data-testid=find-count]')?.textContent === `${n} / ${n}`, count);
+  await page.getByTestId('find-input').fill('zzzznotthere');
+  await page.waitForFunction(() => document.querySelector('[data-testid=find-count]')?.textContent === 'Eşleşme yok');
+  assert((await painted()).length === 0, 'nothing painted without a match');
+  await page.getByTestId('find-close').click();
+  assert((await page.getByTestId('find-bar').count()) === 0, 'find bar closed');
+});
+
+await check('focus mode hides the controls, keeps the position and brings them back', async () => {
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-focus').click();
+  await page.getByTestId('focus-exit').waitFor();
+  assert((await page.getByTestId('reader-back').count()) === 0, 'controls are hidden');
+  assert(/\d+% · .*(dk kaldı|Bitti)/.test(await page.getByTestId('focus-position').textContent()), 'progress stays visible');
+  await shot('focus');
+  await page.getByTestId('focus-exit').click();
+  await page.getByTestId('reader-back').waitFor();
+  assert(/dk kaldı|Bitti/.test(await page.getByTestId('reader-position').textContent()), 'time left shown in the header');
+});
+
 await check('tapping a block offers original + bookmark; bookmarks survive a reload', async () => {
   await frame().locator('#book .blk-paragraph .bt').first().click();
   await page.getByTestId('block-actions').waitFor();
@@ -169,7 +203,8 @@ await check('Original view shows the source page and returns to the same place',
 });
 
 await check('conversion report explains the ledger and what was left out', async () => {
-  await page.getByTestId('open-report').click();
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-report').click();
   await page.getByTestId('report').waitFor();
   await page.getByText('İyi').first().waitFor();
   const complete = await page.getByTestId('completeness').textContent();
