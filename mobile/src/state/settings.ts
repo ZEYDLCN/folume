@@ -30,13 +30,23 @@ export const DEFAULT_AI_PREFS: AiPrefs = {
   translateTo: 'tr',
 };
 
+export interface SyncPrefs {
+  /** off by default: nothing leaves the device unless the reader sets up their own server and key */
+  enabled: boolean;
+}
+
+export const DEFAULT_SYNC_PREFS: SyncPrefs = { enabled: false };
+
 export interface AppSettings {
   serverUrl: string;
   apiKey: string;
+  /** shared secret of the optional sync; only its hash is ever sent to the server. Kept in secure storage. */
+  syncKey: string;
   locale: LocaleSetting;
   appTheme: AppTheme;
   reader: ReaderSettings;
   ai: AiPrefs;
+  sync: SyncPrefs;
 }
 
 const defaultServerUrl = (): string =>
@@ -45,27 +55,31 @@ const defaultServerUrl = (): string =>
 export const defaultSettings = (): AppSettings => ({
   serverUrl: defaultServerUrl(),
   apiKey: '',
+  syncKey: '',
   locale: 'auto',
   appTheme: 'system',
   reader: DEFAULT_READER_SETTINGS,
   ai: DEFAULT_AI_PREFS,
+  sync: DEFAULT_SYNC_PREFS,
 });
 
 interface SettingsStore extends AppSettings {
   loaded: boolean;
   load: () => Promise<void>;
-  update: (patch: Partial<Omit<AppSettings, 'reader' | 'ai'>>) => Promise<void>;
+  update: (patch: Partial<Omit<AppSettings, 'reader' | 'ai' | 'sync'>>) => Promise<void>;
   updateReader: (patch: Partial<ReaderSettings>) => Promise<void>;
   updateAi: (patch: Partial<AiPrefs>) => Promise<void>;
+  updateSync: (patch: Partial<SyncPrefs>) => Promise<void>;
 }
 
 const kv = new AsyncStorageKV();
 
-type Persisted = Omit<AppSettings, 'apiKey'>;
+type Persisted = Omit<AppSettings, 'apiKey' | 'syncKey'>;
 
 async function persist(s: AppSettings): Promise<void> {
-  const { apiKey: _apiKey, ...rest } = s;
+  const { apiKey: _apiKey, syncKey: _syncKey, ...rest } = s;
   void _apiKey;
+  void _syncKey;
   await kv.set<Persisted>(KEY.settings, rest);
 }
 
@@ -75,13 +89,16 @@ export const useSettings = create<SettingsStore>((set, get) => ({
   async load() {
     const stored = await kv.get<Partial<Persisted>>(KEY.settings);
     const apiKey = (await getSecret('apiKey')) ?? '';
+    const syncKey = (await getSecret('syncKey')) ?? '';
     const base = defaultSettings();
     const merged: AppSettings = {
       ...base,
       ...stored,
       reader: { ...base.reader, ...(stored?.reader ?? {}) },
       ai: { ...base.ai, ...(stored?.ai ?? {}) },
+      sync: { ...base.sync, ...(stored?.sync ?? {}) },
       apiKey,
+      syncKey,
     };
     setLocale(merged.locale);
     set({ ...merged, loaded: true });
@@ -91,12 +108,18 @@ export const useSettings = create<SettingsStore>((set, get) => ({
     if (patch.locale !== undefined) setLocale(patch.locale);
     set(patch);
     if (patch.apiKey !== undefined) await setSecret('apiKey', patch.apiKey || null);
+    if (patch.syncKey !== undefined) await setSecret('syncKey', patch.syncKey || null);
     await persist(next);
   },
   async updateAi(patch) {
     const ai = { ...get().ai, ...patch };
     set({ ai });
     await persist({ ...get(), ai });
+  },
+  async updateSync(patch) {
+    const sync = { ...get().sync, ...patch };
+    set({ sync });
+    await persist({ ...get(), sync });
   },
   async updateReader(patch) {
     const reader = { ...get().reader, ...patch };

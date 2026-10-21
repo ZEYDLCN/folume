@@ -15,6 +15,7 @@ from .ai.providers import LLMProvider, build_provider
 from .ai.service import AiService
 from .config import Settings
 from .jobs import JobManager
+from .sync_store import SyncStore
 
 
 def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | None = None) -> FastAPI:
@@ -25,11 +26,14 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
     async def lifespan(_: FastAPI):
         yield
         jobs.shutdown()
+        if app.state.sync is not None:
+            app.state.sync.close()
 
     app = FastAPI(title="Folume API", version=__version__, lifespan=lifespan)
     app.state.settings = settings
     app.state.jobs = jobs
     app.state.ai = AiService(settings, llm_provider or build_provider(settings))
+    app.state.sync = SyncStore(settings.sync_db) if settings.sync_enabled else None
 
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
@@ -53,13 +57,14 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
         detail = exc.detail if isinstance(exc.detail, dict) else {"code": "error", "message": str(exc.detail)}
         return JSONResponse(status_code=exc.status_code, content={"error": detail})
 
-    from .routes import ai, documents  # noqa: PLC0415 (routes read the app state)
+    from .routes import ai, documents, sync  # noqa: PLC0415 (routes read the app state)
     from .routes.ai import RateLimiter  # noqa: PLC0415
 
     app.state.ai_limiter = RateLimiter(limit=settings.ai_rate_limit_per_minute)
     guarded = [Depends(require_key)]
     app.include_router(documents.router, prefix="/v1", dependencies=guarded)
     app.include_router(ai.router, prefix="/v1", dependencies=guarded)
+    app.include_router(sync.router, prefix="/v1", dependencies=guarded)
 
     @app.get("/v1/health")
     def health() -> dict:

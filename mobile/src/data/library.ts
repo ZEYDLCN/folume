@@ -2,6 +2,7 @@ import type { Document } from '@/core/types';
 
 import type { BlobStore } from './blobs';
 import { KEY, type KeyValueStore } from './kv';
+import { Mutex, sharedMutex } from './mutex';
 
 export interface LibraryEntry {
   id: string;
@@ -18,8 +19,11 @@ export interface LibraryEntry {
   sizeBytes: number;
   year: number | null;
   doi: string | null;
+  arxivId?: string | null;
   language: string | null;
   tags: string[];
+  /** when `tags` last changed; lets synced devices keep the newest tag list */
+  tagsUpdatedAt?: number;
   hasOriginalPdf: boolean;
 }
 
@@ -54,23 +58,27 @@ export const emptyState = (now: number): DocState => ({
 
 export const docPath = (id: string) => `docs/${id}`;
 
+export interface TagsRecord {
+  tags: string[];
+  updatedAt: number;
+}
+export const tagsKey = (id: string) => `${KEY.docPrefix(id)}tags`;
+export const stateKey = KEY.docState;
+
 /**
  * Local-first library: a compact index in the key-value store, documents and images in the blob store.
  * Mutations are serialized so concurrent saves (progress ticks, imports) never lose each other.
  */
 export class LibraryRepo {
-  private queue: Promise<unknown> = Promise.resolve();
-
   constructor(
     private readonly kv: KeyValueStore,
     private readonly blobs: BlobStore,
     private readonly now: () => number = Date.now,
+    private readonly mutex: Mutex = sharedMutex,
   ) {}
 
   private serial<T>(work: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(work, work);
-    this.queue = next.catch(() => undefined);
-    return next;
+    return this.mutex.run(work);
   }
 
   async list(): Promise<LibraryEntry[]> {
@@ -102,8 +110,10 @@ export class LibraryRepo {
         sizeBytes,
         year: doc.metadata.year,
         doi: doc.metadata.doi,
+        arxivId: doc.metadata.arxiv_id,
         language: doc.metadata.language,
-        tags: previous?.tags ?? [],
+        tags: previous?.tags ?? (await this.kv.get<TagsRecord>(tagsKey(doc.id)))?.tags ?? [],
+        tagsUpdatedAt: previous?.tagsUpdatedAt ?? (await this.kv.get<TagsRecord>(tagsKey(doc.id)))?.updatedAt,
         hasOriginalPdf,
       };
       await this.kv.set(KEY.library, [...entries.filter((e) => e.id !== doc.id), entry]);
@@ -137,8 +147,14 @@ export class LibraryRepo {
     return this.serial(() => this.patchEntry(id, { lastOpenedAt: this.now() }));
   }
 
+  /** Tags live in their own record too, so synced tags are not lost for papers that are not on this device yet. */
   setTags(id: string, tags: string[]): Promise<void> {
-    return this.serial(() => this.patchEntry(id, { tags }));
+    return this.serial(async () => {
+      const clean = [...new Set(tags.map((t) => t.trim()).filter(Boolean))];
+      const updatedAt = this.now();
+      await this.kv.set<TagsRecord>(tagsKey(id), { tags: clean, updatedAt });
+      await this.patchEntry(id, { tags: clean, tagsUpdatedAt: updatedAt });
+    });
   }
 
   private async patchEntry(id: string, patch: Partial<LibraryEntry>): Promise<void> {

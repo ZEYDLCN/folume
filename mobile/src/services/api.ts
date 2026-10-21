@@ -24,6 +24,19 @@ export interface Capabilities {
   sync: { enabled: boolean };
 }
 
+export interface SyncWireRecord {
+  key: string;
+  updated_at: number;
+  deleted: boolean;
+  data: unknown | null;
+}
+
+export interface SyncPullResponse {
+  records: (SyncWireRecord & { seq: number })[];
+  next: number;
+  has_more: boolean;
+}
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -103,6 +116,26 @@ export class FolumeApi {
   async asset(id: string, path: string): Promise<Uint8Array> {
     const res = await this.request(`/v1/jobs/${id}/assets/${path}`);
     return new Uint8Array(await res.arrayBuffer());
+  }
+
+  syncStatus(namespace: string): Promise<{ records: number; seq: number }> {
+    return this.json(`/v1/sync/${namespace}`);
+  }
+
+  syncPull(namespace: string, since: number, limit = 200): Promise<SyncPullResponse> {
+    return this.json(`/v1/sync/${namespace}/records?since=${since}&limit=${limit}`);
+  }
+
+  syncPush(namespace: string, records: SyncWireRecord[]): Promise<{ accepted: number; ignored: number; seq: number }> {
+    return this.json(`/v1/sync/${namespace}/records`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ records }),
+    });
+  }
+
+  syncErase(namespace: string): Promise<{ deleted: number }> {
+    return this.json(`/v1/sync/${namespace}`, { method: 'DELETE' });
   }
 
   async deleteJob(id: string): Promise<void> {

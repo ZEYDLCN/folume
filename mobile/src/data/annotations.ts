@@ -2,6 +2,8 @@ import type { HighlightView } from '@/reader/protocol';
 
 import type { KeyValueStore } from './kv';
 import { KEY } from './kv';
+import { Mutex, sharedMutex } from './mutex';
+import { markDeleted } from './tombstones';
 
 export type AnnotationOrigin = 'user' | 'ai';
 
@@ -32,21 +34,20 @@ export const HIGHLIGHT_COLORS = [
   { name: 'pink', value: 'rgba(255, 96, 160, 0.34)' },
 ] as const;
 
-const key = (docId: string) => `${KEY.docPrefix(docId)}ann`;
+export const annKey = (docId: string) => `${KEY.docPrefix(docId)}ann`;
+export const annRecordKey = (docId: string, id: string) => `ann/${docId}/${id}`;
+const key = annKey;
 
 export class AnnotationRepo {
-  private queue: Promise<unknown> = Promise.resolve();
-
   constructor(
     private readonly kv: KeyValueStore,
     private readonly now: () => number = Date.now,
     private readonly newId: () => string = () => `a${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`,
+    private readonly mutex: Mutex = sharedMutex,
   ) {}
 
   private serial<T>(work: () => Promise<T>): Promise<T> {
-    const next = this.queue.then(work, work);
-    this.queue = next.catch(() => undefined);
-    return next;
+    return this.mutex.run(work);
   }
 
   async list(docId: string): Promise<Annotation[]> {
@@ -87,6 +88,7 @@ export class AnnotationRepo {
     return this.serial(async () => {
       const items = (await this.kv.get<Annotation[]>(key(docId))) ?? [];
       await this.kv.set(key(docId), items.filter((a) => a.id !== id));
+      await markDeleted(this.kv, annRecordKey(docId, id), this.now());
     });
   }
 }
