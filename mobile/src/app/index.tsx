@@ -147,7 +147,6 @@ export default function LibraryScreen() {
                 </View>
               ) : null}
             </View>
-            <IconButton icon="create-outline" label={t('notes.title')} onPress={() => router.push('/notes')} testID="open-notes" color={c.brandText} />
             <IconButton icon="settings-outline" label={t('settings.title')} onPress={() => router.push('/settings')} testID="open-settings" color={c.brandText} />
           </View>
           <Pressable
@@ -162,6 +161,29 @@ export default function LibraryScreen() {
               {t('library.searchPill')}
             </AppText>
           </Pressable>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm }} testID="library-shortcuts">
+            {(
+              [
+                ['open-ask', 'chatbubbles-outline', t('library.ask'), '/ask'],
+                ['open-projects', 'grid-outline', t('library.projects'), '/projects'],
+                ['open-notes', 'create-outline', t('notes.title'), '/notes'],
+              ] as const
+            ).map(([testID, icon, label, href]) => (
+              <Pressable
+                key={testID}
+                accessibilityRole="button"
+                accessibilityLabel={label}
+                onPress={() => router.push(href)}
+                testID={testID}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, height: 36, paddingHorizontal: 14, borderRadius: radius.pill, backgroundColor: 'rgba(255,255,255,0.18)' }}
+              >
+                <Ionicons name={icon} size={16} color={c.brandText} />
+                <AppText variant="caption" color={c.brandText} style={{ fontWeight: '600' }}>
+                  {label}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
         </View>
 
         {entries && entries.length > 3 ? (

@@ -205,6 +205,65 @@ await check('search finds text across papers and opens the paper at that block',
   await p.getByTestId('screen-back').click();
 });
 
+await check('a project holds a table of papers: cells are filled with the papers’ own sentences and pages, and the table exports', async () => {
+  const p = A.page;
+  await p.getByTestId('open-projects').click();
+  await p.getByTestId('projects-empty').waitFor();
+  await p.getByTestId('project-new-name').fill('Sparse models review');
+  await p.getByTestId('project-create').click();
+  await p.getByTestId('project-empty').waitFor();
+  await p.getByTestId('project-add-papers').click();
+  await p.getByTestId(`project-pick-${ieee}`).click();
+  await p.getByTestId(`project-pick-${companion}`).click();
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId(`project-paper-${ieee}`).waitFor();
+  await p.getByTestId('project-suggest-all').click();
+  await p.getByTestId('project-notice').waitFor();
+  assert(/Filled \d+ cells/.test(await p.getByTestId('project-notice').textContent()), await p.getByTestId('project-notice').textContent());
+  const results = await p.getByTestId(`cell-${ieee}-c4`).inputValue();
+  assert(/\d+%/.test(results) && /\(p\. \d+\)$/.test(results), `results cell: ${results}`);
+  const limits = await p.getByTestId(`cell-${ieee}-c5`).inputValue();
+  assert(/limitation of expert gating/i.test(limits), `limitations cell: ${limits}`);
+  // every filled cell is a sentence of the paper itself
+  const doc = JSON.parse(readFileSync(path.join(here, 'out/ieee_ml/document.json'), 'utf8'));
+  const all = doc.blocks.map((b) => b.text).join('\n');
+  for (const c of ['c1', 'c2', 'c3', 'c4', 'c5']) {
+    const v = await p.getByTestId(`cell-${ieee}-${c}`).inputValue();
+    assert(v === '' || all.includes(v.replace(/ \(p\. \d+\)$/, '')), `cell ${c} is not from the paper: ${v}`);
+  }
+  // writing by hand, and a column of one's own
+  await p.getByTestId(`cell-${companion}-c1`).fill('My own note');
+  await p.getByTestId(`cell-${companion}-c1`).blur();
+  await p.getByTestId('project-columns').click();
+  await p.getByTestId('column-new').fill('Random seeds');
+  await p.getByTestId('column-add').click();
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId(`cell-suggest-${ieee}-c6`).click();
+  await p.waitForFunction((id) => /seeds/i.test(document.querySelector(`[data-testid="cell-${id}-c6"]`)?.value ?? ''), ieee);
+  await A.shot('02d-project');
+  // the table leaves as CSV and Excel
+  await p.getByTestId('project-export').click();
+  const [csv] = await Promise.all([p.waitForEvent('download'), p.getByTestId('project-export-csv').click()]);
+  const text = readFileSync(await csv.path(), 'utf8').replace(/^﻿/, '');
+  const lines = text.split('\r\n');
+  assert(lines[0] === 'Paper,Authors,Year,Problem,Method,Data,Results,Limitations,Random seeds', lines[0]);
+  assert(text.includes('Sparse Routing for Efficient Transformers') && text.includes('My own note'), text.slice(0, 300));
+  await p.getByTestId('project-export').click();
+  const [xlsx] = await Promise.all([p.waitForEvent('download'), p.getByTestId('project-export-xlsx').click()]);
+  const bytes = readFileSync(await xlsx.path());
+  assert(bytes.subarray(0, 2).toString() === 'PK' && bytes.includes('xl/worksheets/sheet1.xml') && bytes.includes('My own note'), 'a workbook with the cell');
+  // it is still there after leaving
+  await p.getByTestId('project-back').click();
+  const card = p.locator('[data-testid^=project-p]').filter({ hasText: '2 papers' }).first();
+  await card.waitFor({ timeout: 10000 });
+  await card.click();
+  await p.getByTestId(`cell-${companion}-c1`).waitFor();
+  assert((await p.getByTestId(`cell-${companion}-c1`).inputValue()) === 'My own note', 'the cell is kept');
+  await p.getByTestId('project-delete').click();
+  await p.getByTestId('projects-empty').waitFor();
+  await p.getByTestId('screen-back').click();
+});
+
 await check('connections show shared concepts, with their relation and a way to both sources', async () => {
   const p = A.page;
   await p.getByTestId(`connections-${ieee}`).click();
@@ -242,8 +301,59 @@ await check('AI comparison shows what is sent first and cites passages of both p
   await p.getByTestId('sheet-close').click();
 });
 
+await check('asking the library searches every paper, shows what is sent, and cites passages with their paper', async () => {
+  const p = A.page;
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-ask').click();
+  const count = async () => (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).length;
+  const before = await count();
+  await p.getByTestId('ask-library-input').fill('How does contrastive pretraining improve robustness?');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('send-preview').waitFor({ timeout: 10000 });
+  assert((await count()) === before, 'nothing is sent before confirmation');
+  assert(/Learning Compact Representations/.test(await p.getByTestId('send-preview').textContent()), 'the preview names the paper a passage comes from');
+  await A.shot('05b-ask-preview');
+  await p.getByTestId('send-confirm').click();
+  await p.getByTestId('ask-result').waitFor({ timeout: 15000 });
+  assert((await count()) === before + 1, 'exactly one model call');
+  assert((await p.getByTestId('segment-grounded').count()) >= 1, 'a grounded sentence');
+  const sent = (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).at(-1).messages.find((m) => m.role === 'user').content;
+  assert(/How does contrastive pretraining improve robustness\?/.test(typeof sent === 'string' ? sent : sent.map((x) => x.text ?? '').join('\n')), 'the question is sent');
+  await A.shot('05c-ask-result');
+  await p.locator('[data-testid^=cite-]').first().click();
+  await p.waitForURL(/\/reader\/.+block=b\d+/, { timeout: 10000 });
+  await A.frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await p.getByTestId('reader-back').click();
+  await p.getByTestId('screen-back').click();
+});
+
+await check('with AI switched off, asking lists the matching passages and sends nothing', async () => {
+  const p = A.page;
+  const count = async () => (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).length;
+  const before = await count();
+  await p.getByTestId('open-settings').click();
+  await A.setSwitch('switch-ai', false);
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-ask').click();
+  await p.getByTestId('ask-library-input').fill('expert gating sensitivity');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('ask-result').waitFor({ timeout: 10000 });
+  assert(/switched off/.test(await p.getByTestId('ask-result').textContent()), 'says why there is no written answer');
+  assert((await p.getByTestId('segment-grounded').count()) >= 1, 'matching passages are listed');
+  assert((await count()) === before, 'nothing was sent');
+  await p.getByTestId('ask-library-input').fill('zebra crossing xylophone');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('ask-none').waitFor({ timeout: 10000 });
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-settings').click();
+  await A.setSwitch('switch-ai', true);
+  await p.getByTestId('screen-back').click();
+});
+
 await check('a defined concept becomes a review card, and the library shows what is due', async () => {
   const p = A.page;
+  await p.getByTestId(`connections-${ieee}`).click();
+  await p.getByTestId('concept-add-review').first().waitFor({ timeout: 15000 });
   await p.getByTestId('concept-add-review').first().click();
   await p.getByText('Added to your review list').first().waitFor();
   await p.getByTestId('screen-back').click();

@@ -154,3 +154,46 @@ describe('LibrarySearch', () => {
     expect(snippet.slice(ranges[0][0], ranges[0][1])).toBe('needle');
   });
 });
+
+describe('LibrarySearch.passages', () => {
+  const search = new LibrarySearch([ieeeMl, mlCompanion, acmGraph]);
+  const blockText = (docId: string, blockId: string) => [ieeeMl, mlCompanion, acmGraph].find((d) => d.id === docId)!.blocks.find((b) => b.id === blockId)!.text;
+
+  it('returns whole blocks of the papers, not snippets, with where they came from', () => {
+    const found = search.passages('contrastive pretraining robustness', { limit: 4 });
+    expect(found.length).toBeGreaterThan(0);
+    for (const p of found) {
+      expect(p.text).toBe(blockText(p.docId, p.blockId));
+      expect(p.page).toBeGreaterThanOrEqual(1);
+      expect(p.title.length).toBeGreaterThan(0);
+    }
+    expect(found[0].docId).toBe(mlCompanion.id);
+  });
+
+  it('does not let one paper fill the answer', () => {
+    const found = search.passages('attention mechanism gradient descent embedding space', { limit: 6, perPaper: 2 });
+    const perPaper = new Map<string, number>();
+    for (const p of found) perPaper.set(p.docId, (perPaper.get(p.docId) ?? 0) + 1);
+    expect(Math.max(...perPaper.values())).toBeLessThanOrEqual(2);
+    expect(perPaper.size).toBeGreaterThanOrEqual(2);
+  });
+
+  it('leaves out headings and one-line fragments, which prove nothing', () => {
+    const found = search.passages('related work introduction method experiments', { limit: 10 });
+    for (const p of found) {
+      expect(p.kind === 'heading' || p.kind === 'title').toBe(false);
+      expect(p.text.length).toBeGreaterThanOrEqual(40);
+    }
+  });
+
+  it('finds nothing for words no paper uses, and for a query that is too short', () => {
+    expect(search.passages('zebra crossing xylophone')).toEqual([]);
+    expect(search.passages('a')).toEqual([]);
+  });
+
+  it('can be restricted to chosen papers', () => {
+    const found = search.passages('embedding space', { limit: 5, docIds: [acmGraph.id] });
+    expect(found.length).toBeGreaterThan(0);
+    expect(found.every((p) => p.docId === acmGraph.id)).toBe(true);
+  });
+});
