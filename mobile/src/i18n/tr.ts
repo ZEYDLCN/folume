@@ -688,6 +688,15 @@ export const tr = {
   'feed.error.network': 'Sunucuya ulaşılamadı. Ayarlardaki sunucu adresini kontrol et.',
   'feed.error.unknown': 'Liste alınamadı.',
   'feed.listed': 'Okuma listesine eklendi.',
+
+  'send.title': 'Folume’a makale gönder',
+  'send.body': 'Makaleyi nerede bulduysan oradan ekle.',
+  'send.share': 'Tarayıcıda Folume’u yükle (Ana ekrana ekle); paylaşım menünde görünür. Bir makalenin sayfasını ya da bağlantısını paylaşınca burada eklemeye hazır açılır.',
+  'send.bookmarklet': 'Yer imini kopyala',
+  'send.bookmarklet.hint': 'Tarayıcında yeni bir yer imi oluştur ve adres olarak bunu yapıştır. Bir makalenin sayfasında tıkla: sayfa buraya gönderilir.',
+  'send.copied': 'Kopyalandı.',
+  'send.extension': 'Chrome, Edge ve Brave için bir eklenti var: projenin “extension” klasörünü “Paketlenmemiş uzantı yükle” ile ekle. Araç çubuğu düğmesi ve sağ tık menüsü sayfayı, bağlantıyı ya da seçili DOI/arXiv kimliğini buraya gönderir.',
+  'send.deeplink': 'Diğer uygulamalar folume://import?url=<makale bağlantısı> adresini açarak makale gönderebilir.',
 } as const;
 
 export type StringKey = keyof typeof tr;

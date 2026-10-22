@@ -80,6 +80,67 @@ await page.goto(`http://localhost:${WEB}/`);
 await page.getByTestId('import-link-button').waitFor({ timeout: 15000 });
 await useServer(API_OPEN);
 
+await check('the web app installs and receives shares: a manifest with a share target, and a link handed over by the browser opens ready to add', async () => {
+  const base = `http://localhost:${WEB}`;
+  const html = await (await fetch(`${base}/`)).text();
+  assert(/<link rel="manifest" href="\/manifest\.webmanifest"/.test(html), 'the page links its manifest');
+  assert(/serviceWorker/.test(html), 'the page registers its service worker');
+  const res = await fetch(`${base}/manifest.webmanifest`);
+  assert(/manifest\+json/.test(res.headers.get('content-type')), res.headers.get('content-type'));
+  const manifest = await res.json();
+  assert(manifest.display === 'standalone' && manifest.start_url === '/' && manifest.name === 'Folume', 'installable');
+  assert(manifest.share_target.action === '/' && manifest.share_target.method === 'GET', 'share target');
+  assert(JSON.stringify(manifest.share_target.params) === JSON.stringify({ title: 'title', text: 'text', url: 'url' }), 'share params');
+  assert(manifest.icons.some((i) => i.sizes === '192x192') && manifest.icons.some((i) => i.sizes === '512x512') && manifest.icons.some((i) => i.purpose === 'maskable'), 'icons');
+  for (const icon of manifest.icons) {
+    const r = await fetch(`${base}${icon.src}`);
+    assert(r.ok && r.headers.get('content-type') === 'image/png', `icon ${icon.src}`);
+  }
+  assert((await fetch(`${base}/sw.js`)).headers.get('content-type') === 'text/javascript', 'service worker is a script');
+  // Android's share menu hands over a title and a text with the link inside it
+  await page.goto(`${base}/?title=Paper&text=${encodeURIComponent('Sparse Routing for Efficient Transformers https://arxiv.org/abs/2401.01234.')}`);
+  await page.getByTestId('link-sheet').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('link-input').inputValue()) === 'https://arxiv.org/abs/2401.01234', await page.getByTestId('link-input').inputValue());
+  assert(/arXiv 2401\.01234/.test(await page.getByTestId('link-kind').textContent()), 'recognised');
+  assert(!/text=|title=/.test(page.url()), `the address is cleaned up: ${page.url()}`);
+  await shot('01b-shared');
+  // a plain link, as Safari and Chrome hand over a page
+  await page.goto(`${base}/?url=${encodeURIComponent('https://example.org/paper.pdf')}`);
+  await page.getByTestId('link-sheet').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('link-input').inputValue()) === 'https://example.org/paper.pdf', 'url param');
+  // the extension and the bookmarklet use ?import=; a deep link uses /import?url=
+  await page.goto(`${base}/?import=${encodeURIComponent('10.1145/3292500.3330701')}`);
+  await page.getByTestId('link-sheet').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('link-input').inputValue()) === '10.1145/3292500.3330701', 'import param');
+  await page.goto(`${base}/import?url=${encodeURIComponent('https://arxiv.org/abs/2401.01234')}`);
+  await page.getByTestId('link-sheet').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('link-input').inputValue()) === 'https://arxiv.org/abs/2401.01234', 'deep link');
+  // something that names no paper opens the library and nothing else
+  await page.goto(`${base}/?text=${encodeURIComponent('no links here at all')}`);
+  await page.getByTestId('import-link-button').waitFor({ timeout: 15000 });
+  assert((await page.getByTestId('link-sheet').count()) === 0, 'no dialog for nothing');
+});
+
+await check('Settings offers the bookmarklet, which opens this app with the page being read', async () => {
+  await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: `http://localhost:${WEB}` });
+  await page.goto(`http://localhost:${WEB}/`);
+  await page.getByTestId('open-settings').click();
+  await page.getByTestId('send-settings').waitFor();
+  await page.getByTestId('copy-bookmarklet').click();
+  await page.getByText('Copied.').waitFor();
+  const code = await page.evaluate(() => navigator.clipboard.readText());
+  assert(code.startsWith('javascript:') && !code.includes('\n'), code.slice(0, 80));
+  // run it as a browser would, on another page, and see what it opens
+  const opened = await page.evaluate((c) => {
+    let url = null;
+    const fake = { open: (u) => { url = u; }, };
+    new Function('window', 'location', 'encodeURIComponent', decodeURIComponent(c.slice('javascript:'.length)))(fake, { href: 'https://arxiv.org/abs/2401.01234' }, encodeURIComponent);
+    return url;
+  }, code);
+  assert(opened === `http://localhost:${WEB}/?import=https%3A%2F%2Farxiv.org%2Fabs%2F2401.01234`, opened);
+  await page.getByTestId('screen-back').click();
+});
+
 await check('the dialog recognises arXiv ids, DOIs and links, and refuses nonsense before sending anything', async () => {
   await openLinkSheet();
   const input = page.getByTestId('link-input');

@@ -5,8 +5,10 @@ import { Alert, Platform } from 'react-native';
 import { ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { bookmarklet } from '@/core/share';
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { LocaleSetting } from '@/i18n';
+import { copyText } from '@/services/clipboard';
 import { getApi } from '@/services/container';
 import { eraseRemote, lastSyncAt, MIN_SYNC_KEY_LENGTH, runSync, syncErrorKey } from '@/services/sync';
 import type { Capabilities } from '@/services/api';
@@ -27,6 +29,7 @@ export default function SettingsScreen() {
   const [url, setUrl] = useState(s.serverUrl);
   const [key, setKey] = useState(s.apiKey);
   const [test, setTest] = useState<Test>({ status: 'idle' });
+  const [copied, setCopied] = useState(false);
   const [syncKey, setSyncKey] = useState(s.syncKey);
   const [syncUi, setSyncUi] = useState<SyncUi>({ status: 'idle' });
   const [last, setLast] = useState<number | null>(null);
@@ -278,6 +281,38 @@ export default function SettingsScreen() {
               <Button label={t('sync.erase')} variant="ghost" onPress={() => void erase()} disabled={!keyOk} testID="sync-erase" />
             </View>
           ) : null}
+        </Card>
+
+        <Card style={{ gap: space.sm }} testID="send-settings">
+          <AppText variant="heading">{t('send.title')}</AppText>
+          <AppText muted>{t('send.body')}</AppText>
+          {Platform.OS === 'web' ? (
+            <>
+              <AppText variant="caption" muted>
+                {t('send.share')}
+              </AppText>
+              <Button
+                label={copied ? t('send.copied') : t('send.bookmarklet')}
+                variant="secondary"
+                icon="bookmark-outline"
+                onPress={() => {
+                  void copyText(bookmarklet(window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '')));
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                testID="copy-bookmarklet"
+              />
+              <AppText variant="caption" muted>
+                {t('send.bookmarklet.hint')}
+              </AppText>
+            </>
+          ) : null}
+          <AppText variant="caption" muted>
+            {t('send.extension')}
+          </AppText>
+          <AppText variant="caption" muted>
+            {t('send.deeplink')}
+          </AppText>
         </Card>
 
         <Card style={{ gap: space.sm }}>

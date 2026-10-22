@@ -5,6 +5,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons } from '@expo/vector-icons';
 
 import { pickContinue } from '@/core/continueReading';
+import { paperFromShared } from '@/core/share';
 import { LibraryCard } from '@/features/library/LibraryCard';
 import { LinkSheet } from '@/features/library/LinkSheet';
 import { TagsSheet } from '@/features/library/TagsSheet';
@@ -31,18 +32,20 @@ export default function LibraryScreen() {
   const [tagging, setTagging] = useState<LibraryEntry | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
   const [linkInitial, setLinkInitial] = useState('');
-  const params = useLocalSearchParams<{ import?: string }>();
+  const params = useLocalSearchParams<{ import?: string; url?: string; text?: string; title?: string }>();
   const [due, setDue] = useState(0);
   const [wanted, setWanted] = useState(0);
   const lastSource = useRef<PdfSource | null>(null);
 
   // a link, DOI or arXiv id handed over by a reference list, a shared link or the browser extension
-  const requested = Array.isArray(params.import) ? params.import[0] : params.import;
+  const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+  // `?import=` from the extension, a bookmarklet or the reading list; `?url=&text=&title=` from a browser's share menu (PWA share target)
+  const requested = one(params.import) || paperFromShared({ url: one(params.url), text: one(params.text), title: one(params.title) });
   useEffect(() => {
     if (!requested) return;
     setLinkInitial(requested);
     setLinkOpen(true);
-    router.setParams({ import: undefined });
+    router.setParams({ import: undefined, url: undefined, text: undefined, title: undefined });
   }, [requested, router]);
 
   const refresh = useCallback(async () => {

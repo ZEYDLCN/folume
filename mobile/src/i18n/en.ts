@@ -679,4 +679,13 @@ export const en: Record<StringKey, string> = {
   'feed.error.network': 'The server could not be reached. Check the server address in Settings.',
   'feed.error.unknown': 'The list could not be fetched.',
   'feed.listed': 'Added to your reading list.',
+
+  'send.title': 'Send papers to Folume',
+  'send.body': 'Add a paper from wherever you find it.',
+  'send.share': 'In the browser, install Folume (Add to Home Screen) and it shows up in your share menu. Share a paper’s page or link to it and it opens here, ready to add.',
+  'send.bookmarklet': 'Copy the bookmarklet',
+  'send.bookmarklet.hint': 'Create a bookmark in your browser and paste this as its address. Click it on a paper’s page to send that page here.',
+  'send.copied': 'Copied.',
+  'send.extension': 'There is an extension for Chrome, Edge and Brave: load the project’s “extension” folder with “Load unpacked”. Its toolbar button and right-click menu send the page, a link, or a selected DOI or arXiv id here.',
+  'send.deeplink': 'Other apps can send a paper by opening folume://import?url=<link to the paper>.',
 };
