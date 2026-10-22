@@ -52,7 +52,7 @@ Değişken ekleyince Space kendiliğinden yeniden başlar.
 ## 4. Dene
 
 1. `https://<proje-adı>.pages.dev` adresini aç.
-2. **Ayarlar → Dönüşüm sunucusu**: adres zaten doludur; **API anahtarı**'na 3. adımdaki parolayı yaz → **Bağlantıyı dene** → sürüm görünmeli. (Anahtar uygulamaya gömülmez; her tarayıcıya bir kez girilir.)
+2. **Ayarlar → Dönüştürme sunucusu**: adres zaten doludur; **API anahtarı**'na 3. adımdaki parolayı yaz → **Bağlantıyı dene** → sürüm görünmeli. (Anahtar uygulamaya gömülmez; her tarayıcıya bir kez girilir.)
 3. Kütüphanede bir PDF seç ya da “bağlantıdan ekle” ile bir arXiv numarası yapıştır; kitap gibi açılmalı.
 4. Tarayıcının menüsünden **Ana ekrana ekle / Uygulamayı yükle** ile PWA olarak yükle; paylaşım menünde Folume görünür.
 
@@ -66,7 +66,7 @@ AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak geli
 | `FOLUME_LLM_MODEL` | Variable |
 | `FOLUME_LLM_API_KEY` | Secret |
 
-Sonra uygulamada **Ayarlar → Yapay zekâ**'yı aç. Pasajlar gönderilmeden önce her zaman önizlenir; sağlayıcının saklama ve eğitim politikasını kendin değerlendirmelisin.
+Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönderilmeden önce her zaman önizlenir; sağlayıcının saklama ve eğitim politikasını kendin değerlendirmelisin.
 
 ## Bilmen gerekenler
 
