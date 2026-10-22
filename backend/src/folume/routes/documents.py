@@ -39,6 +39,7 @@ def capabilities(request: Request) -> dict:
         "ai": {"enabled": request.app.state.ai.status().enabled, "vision": request.app.state.ai.status().vision},
         "sync": {"enabled": s.sync_enabled},
         "url_import": s.url_import,
+        "feed": s.feed,
     }
 
 
