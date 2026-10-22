@@ -92,6 +92,8 @@ body.original #orig{display:block}
 .pg .hl{position:absolute;pointer-events:none;background:rgba(255,190,0,.28);outline:2px solid rgba(240,150,0,.95);border-radius:2px}
 .pg .hover{position:absolute;pointer-events:none;background:rgba(36,87,214,.14);outline:1px solid rgba(36,87,214,.8)}
 .pg.loading{min-height:200px}
+.pg svg.ink{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#orig.ink-on .pg{touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
 .zoom{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.94);overflow:auto;-webkit-overflow-scrolling:touch}
 .zoom img{display:block;max-width:none;background:#fff;margin:56px auto 40px}
 .zoom img.tint{background:transparent;filter:invert(1)}

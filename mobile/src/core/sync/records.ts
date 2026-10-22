@@ -6,13 +6,16 @@ export interface SyncRecord {
   data: unknown | null;
 }
 
-export type RecordKind = 'ann' | 'state' | 'quiz' | 'card' | 'tags';
+/** `fix` and `ink` belong to a paper; `proj` (projects) and `want` (the reading list) belong to the reader. */
+export type RecordKind = 'ann' | 'state' | 'quiz' | 'card' | 'tags' | 'fix' | 'ink' | 'proj' | 'want';
 
-export function parseRecordKey(key: string): { kind: RecordKind; docId: string; id: string | null } | null {
-  const m = /^(ann|state|quiz|card|tags)\/([A-Za-z0-9_.:-]{1,80})(?:\/([A-Za-z0-9_.:-]{1,80}))?$/.exec(key);
+export function parseRecordKey(key: string): { kind: RecordKind; docId: string | null; id: string | null } | null {
+  const global = /^(proj|want)\/([A-Za-z0-9_.:-]{1,80})$/.exec(key);
+  if (global) return { kind: global[1] as RecordKind, docId: null, id: global[2] };
+  const m = /^(ann|state|quiz|card|tags|fix|ink)\/([A-Za-z0-9_.:-]{1,80})(?:\/([A-Za-z0-9_.:-]{1,80}))?$/.exec(key);
   if (!m) return null;
   const kind = m[1] as RecordKind;
-  const needsId = kind === 'ann' || kind === 'quiz' || kind === 'card';
+  const needsId = kind === 'ann' || kind === 'quiz' || kind === 'card' || kind === 'fix' || kind === 'ink';
   if (needsId !== !!m[3]) return null;
   return { kind, docId: m[2], id: m[3] ?? null };
 }
@@ -35,6 +38,14 @@ export function validRecordData(kind: RecordKind, data: unknown): boolean {
       return num(data.updatedAt) && Array.isArray(data.bookmarks) && num(data.percent);
     case 'tags':
       return Array.isArray(data.tags) && data.tags.every(str) && num(data.updatedAt);
+    case 'fix':
+      return str(data.id) && str(data.docId) && num(data.updatedAt) && (data.text === null || str(data.text)) && (data.type === null || str(data.type)) && typeof data.hidden === 'boolean' && typeof data.mergePrev === 'boolean';
+    case 'ink':
+      return str(data.id) && str(data.docId) && num(data.page) && num(data.updatedAt) && Array.isArray(data.strokes) && data.strokes.every((st) => isObj(st) && str(st.c) && num(st.w) && Array.isArray(st.p));
+    case 'proj':
+      return str(data.id) && str(data.name) && num(data.updatedAt) && Array.isArray(data.paperIds) && data.paperIds.every(str) && Array.isArray(data.columns) && isObj(data.cells);
+    case 'want':
+      return str(data.id) && str(data.title) && num(data.updatedAt) && (data.state === 'todo' || data.state === 'done');
   }
 }
 

@@ -14,6 +14,8 @@ export function BlockActions({
   onShowOriginal,
   onExplain,
   onExportTable,
+  onFix,
+  onReport,
   onClose,
 }: {
   block: Block;
@@ -23,6 +25,10 @@ export function BlockActions({
   onExplain: () => void;
   /** for a table with readable cells: write it out as CSV or Excel */
   onExportTable?: (kind: 'csv' | 'xlsx') => void;
+  /** correct what the converter got wrong in this block */
+  onFix?: () => void;
+  /** make a small file about a wrong conversion */
+  onReport?: () => void;
   onClose: () => void;
 }) {
   const t = useT();
@@ -61,6 +67,8 @@ export function BlockActions({
           </AppText>
         </View>
         <IconButton icon="color-wand-outline" label={t('sel.explain')} onPress={onExplain} testID="action-explain" />
+        {onFix ? <IconButton icon="construct-outline" label={t('fix.title')} onPress={onFix} testID="action-fix" /> : null}
+        {onReport ? <IconButton icon="flag-outline" label={t('report.block.title')} onPress={onReport} testID="action-report" /> : null}
         {block.type === 'table' && block.table && onExportTable ? (
           <>
             <IconButton icon="document-text-outline" label={t('action.csv')} onPress={() => onExportTable('csv')} testID="action-csv" />

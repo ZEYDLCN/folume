@@ -327,6 +327,59 @@ await check('a reference offers its DOI and adding it to the library', async () 
   await r.close();
 });
 
+await check('ink: drawing on an original page, erasing, undoing, and strokes that come back when the paper is opened again', async () => {
+  const r = await openReader(browser, bundle, { mode: 'original' });
+  await r.page.locator('#orig .pg').first().waitFor();
+  await r.page.locator('#orig .pg svg.ink').first().waitFor({ state: 'attached' });
+  const box = await r.page.locator('#orig .pg img').first().boundingBox();
+  await r.page.evaluate(() => scrollTo(0, 0));
+  const drag = async (from, to, steps = 8) => {
+    await r.page.mouse.move(box.x + box.width * from[0], box.y + box.height * from[1]);
+    await r.page.mouse.down();
+    await r.page.mouse.move(box.x + box.width * to[0], box.y + box.height * to[1], { steps });
+    await r.page.mouse.up();
+  };
+  const changes = async () => (await r.events()).filter((e) => e.type === 'ink-changed');
+  // with the pen up, touching the page does not draw
+  await drag([0.2, 0.2], [0.6, 0.2]);
+  assert((await changes()).length === 0, 'nothing is drawn while the pen is up');
+  await r.host({ type: 'ink-tool', tool: 'pen', color: '#c2512f' });
+  await drag([0.2, 0.2], [0.6, 0.2]);
+  await drag([0.2, 0.3], [0.6, 0.4]);
+  let ev = await changes();
+  assert(ev.length === 2 && ev[1].page === 1 && ev[1].strokes.length === 2, JSON.stringify(ev.map((e) => [e.page, e.strokes.length])));
+  const stroke = ev[1].strokes[0];
+  assert(stroke.c === '#c2512f' && stroke.w > 0 && stroke.p.length >= 3 && stroke.p.every(([x, y]) => x >= 0 && x <= 1 && y >= 0 && y <= 1), 'stroke data');
+  assert(Math.abs(stroke.p[0][0] - 0.2) < 0.02 && Math.abs(stroke.p[0][1] - 0.2) < 0.02, `starts where the pen went down: ${stroke.p[0]}`);
+  assert((await r.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'two strokes drawn');
+  await r.page.screenshot({ path: path.join(shots, 'rt-ink.png') });
+  // highlighter is wide
+  await r.host({ type: 'ink-tool', tool: 'highlighter', color: '#ffd600' });
+  await drag([0.2, 0.5], [0.7, 0.5]);
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes[2].w >= 0.02, 'highlighter is wider than the pen');
+  // eraser takes away the stroke it touches, and only that one
+  await r.host({ type: 'ink-tool', tool: 'eraser', color: '#000' });
+  await drag([0.4, 0.15], [0.4, 0.25], 4);
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 2, `erased one stroke (${ev[ev.length - 1].strokes.length} left)`);
+  // undo brings it back, then undoes the highlighter
+  await r.host({ type: 'ink-undo' });
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 3, 'undo restores the erased stroke');
+  await r.host({ type: 'ink-undo' });
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 2 && (await r.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'undo removes the last stroke');
+  const kept = ev[ev.length - 1].strokes;
+  await r.close();
+  // the strokes are given again when the paper is opened: they are drawn without anyone touching the page
+  const again = await openReader(browser, bundle, { mode: 'original', ink: [{ page: 1, strokes: kept }] });
+  await again.page.locator('#orig .pg svg.ink polyline').first().waitFor({ state: 'attached' });
+  assert((await again.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'strokes restored');
+  // tapping the page with the pen up still identifies the block (the original view keeps working)
+  await again.close();
+});
+
 await check('a scanned (unsupported) document explains itself instead of showing a blank page', async () => {
   const empty = structuredClone(doc);
   empty.blocks = [];

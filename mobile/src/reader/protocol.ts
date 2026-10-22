@@ -106,6 +106,18 @@ export interface HighlightView {
   hasNote: boolean;
 }
 
+/** A hand-drawn stroke: colour, width as a fraction of the page width, points as fractions of the page. */
+export interface InkStroke {
+  c: string;
+  w: number;
+  p: [number, number][];
+}
+export type InkTool = 'off' | 'pen' | 'highlighter' | 'eraser';
+export interface InkPageView {
+  page: number;
+  strokes: InkStroke[];
+}
+
 export interface InitMessage {
   type: 'init';
   doc: Document;
@@ -114,6 +126,8 @@ export interface InitMessage {
   anchor: Anchor | null;
   bookmarks: string[];
   highlights: HighlightView[];
+  /** hand-drawn notes on the original pages */
+  ink?: InkPageView[];
   strings: ReaderStrings;
   /** a block to flash after the first layout (e.g. coming from a note) */
   focus: { blockId: string; page?: number } | null;
@@ -133,6 +147,8 @@ export type HostMessage =
   | { type: 'terms'; items: TermView[] }
   /** scroll (or turn the page) to a painted highlight, only if it is out of the comfortable part of the screen */
   | { type: 'reveal'; id: string }
+  | { type: 'ink-tool'; tool: InkTool; color: string }
+  | { type: 'ink-undo' }
   | { type: 'clear-selection' }
   | { type: 'highlight-block'; blockId: string | null };
 
@@ -163,6 +179,8 @@ export type ReaderEvent =
   | { type: 'quiz'; sectionId: string }
   | { type: 'highlight-tap'; id: string; rect: SelectionRect }
   | { type: 'link'; url: string }
+  /** the strokes of one original page changed (drawn, erased or undone) */
+  | { type: 'ink-changed'; page: number; strokes: InkStroke[] }
   /** the reader asks to add a paper from the reference list to the library */
   | { type: 'import-ref'; doi: string | null; url: string | null; title: string | null }
   | { type: 'mode-changed'; mode: ReaderMode; blockId: string | null }

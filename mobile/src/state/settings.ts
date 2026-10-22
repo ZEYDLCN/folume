@@ -47,6 +47,8 @@ export interface AppSettings {
   appTheme: AppTheme;
   /** the style "copy with citation" writes */
   citationStyle: CitationStyle;
+  /** the name written on notes the reader shares */
+  authorName: string;
   reader: ReaderSettings;
   ai: AiPrefs;
   sync: SyncPrefs;
@@ -62,6 +64,7 @@ export const defaultSettings = (): AppSettings => ({
   locale: 'auto',
   appTheme: 'system',
   citationStyle: 'apa',
+  authorName: '',
   reader: DEFAULT_READER_SETTINGS,
   ai: DEFAULT_AI_PREFS,
   sync: DEFAULT_SYNC_PREFS,

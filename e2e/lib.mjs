@@ -67,7 +67,7 @@ export async function openReader(browser, bundle, init = {}, viewport = { width:
   await host({
     type: 'init', doc: bundle.doc, settings: { ...SETTINGS, ...(init.settings || {}) }, mode: init.mode || 'book',
     anchor: init.anchor ?? null, bookmarks: init.bookmarks || [], highlights: init.highlights || [], strings: STRINGS,
-    focus: init.focus ?? null,
+    focus: init.focus ?? null, ink: init.ink ?? [],
   });
   const events = () => page.evaluate(() => window.__events);
   const waitFor = async (pred, what, timeout = 8000) => {

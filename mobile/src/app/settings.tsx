@@ -164,6 +164,16 @@ export default function SettingsScreen() {
               ]}
             />
           </Field>
+          <Field label={t('settings.authorName')} hint={t('settings.authorName.hint')}>
+            <TextInput
+              value={s.authorName}
+              onChangeText={(authorName) => void s.update({ authorName })}
+              accessibilityLabel={t('settings.authorName')}
+              testID="author-name"
+              placeholderTextColor={c.muted}
+              style={input}
+            />
+          </Field>
           <Field label={t('settings.theme')}>
             <Segmented<AppTheme>
               value={s.appTheme}

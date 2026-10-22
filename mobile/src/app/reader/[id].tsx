@@ -8,6 +8,14 @@ import { indexDocument, readingMinutes, titleOf, type DocIndex } from '@/core/do
 import { citationSourceOf } from '@/core/export/citations';
 import { formatQuote } from '@/core/quote';
 import { copyText } from '@/services/clipboard';
+import { applyFixes } from '@/core/fixes';
+import { buildFeedbackBundle } from '@/core/feedback';
+import type { BlockFix } from '@/data/userdata';
+import { FixSheet } from '@/features/reader/FixSheet';
+import { InkBar, INK_COLORS } from '@/features/reader/InkBar';
+import type { InkPageView, InkTool } from '@/reader/protocol';
+import { ReportSheet } from '@/features/reader/ReportSheet';
+import app from '../../../app.json';
 import { buildQueue, Speaker, type SpeakerState, type Utterance } from '@/core/speech';
 import { createSpeechEngine, speechAvailable } from '@/services/speech';
 import { ListenBar, RATES } from '@/features/reader/ListenBar';
@@ -51,7 +59,16 @@ export default function ReaderScreen() {
   const settings = useSettings((s) => s.reader);
   const updateReader = useSettings((s) => s.updateReader);
 
-  const [doc, setDoc] = useState<Document | null | undefined>(undefined);
+  /** the paper as the converter made it, and the reader's own corrections laid over it */
+  const [raw, setRaw] = useState<Document | null | undefined>(undefined);
+  const [fixes, setFixes] = useState<BlockFix[]>([]);
+  const doc = useMemo(() => (raw ? applyFixes(raw, fixes) : raw), [raw, fixes]);
+  const [fixing, setFixing] = useState<string | null>(null);
+  const [inkTool, setInkTool] = useState<InkTool>('off');
+  const [inkColor, setInkColor] = useState<string>(INK_COLORS[0].value);
+  /** the hand-drawn notes of this paper; kept so the reader can be rebuilt (after a correction) without losing the latest strokes */
+  const [inkPages, setInkPages] = useState<InkPageView[]>([]);
+  const [reporting, setReporting] = useState<string | null>(null);
   const [state, setState] = useState<DocState | null>(null);
   const [mode, setMode] = useState<ReaderMode>('book');
   /** paged flow: which screen of how many */
@@ -94,7 +111,9 @@ export default function ReaderScreen() {
     (async () => {
       const [d, s] = await Promise.all([library.loadDocument(id), library.getState(id)]);
       if (cancelled) return;
-      setDoc(d);
+      setRaw(d);
+      setFixes(await getStores().fixes.list(id));
+      setInkPages((await getStores().ink.list(id)).map((p) => ({ page: p.page, strokes: p.strokes })));
       setState(s);
       setMode(first(params.mode) ? requestedMode : s.mode);
       setPercent(s.percent);
@@ -171,6 +190,10 @@ export default function ReaderScreen() {
   useEffect(() => {
     if (mode !== 'book') stopListening();
   }, [mode, stopListening]);
+  // the pen only works on the original pages; coming back to the book puts it down
+  useEffect(() => {
+    reader.current?.send({ type: 'ink-tool', tool: mode === 'original' ? inkTool : 'off', color: inkColor });
+  }, [mode, inkTool, inkColor]);
 
   const onFound = useCallback((hit: FindHit | null) => {
     setFound(hit);
@@ -253,6 +276,10 @@ export default function ReaderScreen() {
           break;
         case 'flags':
           setFlagsFor(e.blockId);
+          break;
+        case 'ink-changed':
+          setInkPages((list) => [...list.filter((p) => p.page !== e.page), { page: e.page, strokes: e.strokes }]);
+          void getStores().ink.setPage(id, e.page, e.strokes);
           break;
         case 'import-ref':
           router.push({ pathname: '/', params: { import: e.doi ?? e.url ?? e.title ?? '' } });
@@ -343,11 +370,15 @@ export default function ReaderScreen() {
               ]}
             />
           </View>
+          {mode === 'original' ? (
+            <InkBar tool={inkTool} color={inkColor} onTool={setInkTool} onColor={(k) => { setInkColor(k); if (inkTool === 'off') setInkTool('pen'); }} onUndo={() => reader.current?.send({ type: 'ink-undo' })} />
+          ) : null}
         </>
       ) : null}
 
       <View style={{ flex: 1 }}>
         <ReaderView
+          key={fixes.map((f) => `${f.id}:${f.updatedAt}`).join(',')}
           ref={reader}
           docId={id}
           doc={doc}
@@ -357,6 +388,7 @@ export default function ReaderScreen() {
           anchor={state.anchor}
           bookmarks={bookmarkIds}
           highlights={highlights}
+          ink={inkPages}
           strings={strings}
           focus={requestedBlock ? { blockId: requestedBlock, page: requestedPage } : null}
           onEvent={onEvent}
@@ -404,6 +436,16 @@ export default function ReaderScreen() {
                 const name = safeSheetName(cap || `Table ${activeBlock.number ?? ''}`, new Set());
                 void shareBinaryFile(`${stem}.xlsx`, tablesToXlsx([{ name, rows: table.rows, headerRows: table.header_rows }]), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
               }
+            }}
+            onFix={() => {
+              setFixing(activeBlock.id);
+              setActive(null);
+              reader.current?.send({ type: 'clear-selection' });
+            }}
+            onReport={() => {
+              setReporting(activeBlock.id);
+              setActive(null);
+              reader.current?.send({ type: 'clear-selection' });
             }}
             bookmarked={bookmarkIds.includes(activeBlock.id)}
             onToggleBookmark={() => toggleBookmark(activeBlock.id)}
@@ -507,6 +549,41 @@ export default function ReaderScreen() {
           ))}
         </View>
       </Sheet>
+      <FixSheet
+        visible={fixing !== null}
+        onClose={() => setFixing(null)}
+        block={fixing ? index.byId.get(fixing) ?? null : null}
+        original={fixing && raw ? raw.blocks.find((b) => b.id === fixing) ?? null : null}
+        fix={fixing ? fixes.find((f) => f.id === fixing) ?? null : null}
+        canMerge={!!fixing && doc.blocks.findIndex((b) => b.id === fixing) > 0}
+        onSave={async (patch) => {
+          if (!fixing) return;
+          await getStores().fixes.set(id, fixing, patch);
+          setFixes(await getStores().fixes.list(id));
+          termsSent.current = false;
+          setFixing(null);
+        }}
+        onRestore={async () => {
+          if (!fixing) return;
+          await getStores().fixes.remove(id, fixing);
+          setFixes(await getStores().fixes.list(id));
+          termsSent.current = false;
+          setFixing(null);
+        }}
+      />
+      <ReportSheet
+        visible={reporting !== null}
+        onClose={() => setReporting(null)}
+        onCreate={async (note, withPage) => {
+          if (!reporting || !raw) return;
+          const block = raw.blocks.find((b) => b.id === reporting);
+          const pageInfo = block ? raw.pages.find((p) => p.number === block.source[0]?.page) : undefined;
+          const pageImage = withPage && pageInfo ? await library.asset(id, pageInfo.image) : null;
+          const bundle = buildFeedbackBundle({ doc: raw, blockId: reporting, note, appVersion: app.expo.version, pageImage });
+          await shareBinaryFile(bundle.filename, bundle.bytes, 'application/zip');
+          setReporting(null);
+        }}
+      />
       <ExportSheet visible={exportOpen} onClose={() => setExportOpen(false)} doc={doc} docId={id} library={library} settings={settings} />
       <LearnSheet
         visible={learnOpen}

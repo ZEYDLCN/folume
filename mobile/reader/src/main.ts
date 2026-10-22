@@ -13,6 +13,7 @@ import type {
 import { clamp, el, post, rectOf } from './dom';
 import { offsetWithin, paintHighlights, textRoot } from './highlights';
 import { markTerms } from './inline';
+import { InkLayer } from './inkLayer';
 import { renderBlock, renderBook, renderOriginal, type RenderCtx } from './render';
 import { CSS } from './styles';
 
@@ -57,6 +58,10 @@ const state: State = {
   back: [],
 };
 
+const ink = new InkLayer({
+  dims: (page) => pageWidthHeight(page),
+  changed: (page, strokes) => post({ type: 'ink-changed', page, strokes }),
+});
 let io: IntersectionObserver | null = null;
 let sheet: HTMLElement | null = null;
 let pill: HTMLElement | null = null;
@@ -409,6 +414,7 @@ function hidePill(): void {
 }
 
 function onOriginalTap(e: MouseEvent): void {
+  if (ink.tool !== 'off') return; // the pen is down on the page, not asking which block it is
   const target = e.target as HTMLElement;
   const pg = target.closest<HTMLElement>('.pg');
   if (!pg) return;
@@ -714,6 +720,7 @@ function rerender(): void {
     else reportProgress();
   }, { passive: true });
   origEl()?.addEventListener('click', onOriginalTap);
+  if (origEl()) ink.mount(origEl() as HTMLElement);
   observeImages();
   if (state.terms.length) markTerms(document, state.terms);
   paintHighlights(state.highlights);
@@ -739,6 +746,7 @@ function init(msg: InitMessage): void {
   state.mode = msg.mode;
   state.bookmarks = new Set(msg.bookmarks);
   state.highlights = msg.highlights;
+  ink.load(msg.ink ?? []);
   state.selectedBlock = null;
   state.originalBlock = msg.focus?.blockId ?? null;
   document.documentElement.lang = msg.doc.metadata.language ?? 'en';
@@ -797,6 +805,12 @@ function handle(msg: HostMessage): void {
     case 'highlights':
       state.highlights = msg.items;
       paintHighlights(msg.items);
+      break;
+    case 'ink-tool':
+      ink.setTool(msg.tool, msg.color);
+      break;
+    case 'ink-undo':
+      ink.undo();
       break;
     case 'reveal':
       reveal(msg.id);
