@@ -151,6 +151,18 @@ Farkımız tek bir özellik değil; okuma rahatlığını, kaynak güvenilirliğ
 - [x] Dışa aktarma ve referans yöneticisi entegrasyonları *(BibTeX, RIS, CSL-JSON, Markdown notlar, JSON yedek)*
 - [x] İsteğe bağlı cihazlar arası senkronizasyon *(kendi sunucunda, varsayılan kapalı)*
 
+### Sonradan eklenenler (README'nin ötesinde)
+
+Hepsi otomatik testlerle doğrulandı (sınırlar için bkz. [Durum](#durum) ve [docs/EVALUATION.md](docs/EVALUATION.md)):
+
+- **Eksiksizlik kanıtı**: PDF metin katmanındaki her harf ve rakam sayılır; eksik ya da fazla harf raporlanır. **Linkle içe aktarma** (arXiv, DOI, sayfa/PDF bağlantısı; SSRF korumalı). **Okuma biçimleri**: Kitap, Dergi, sayfa sayfa, Orijinal. **Dönüştürme**: EPUB, web sayfası, Markdown, düz metin, tabloları CSV/Excel.
+- **Okurken**: şekil, tablo, denklem ve kaynak önizlemesi (ve “geri dön”), terim ve kısaltma açıklamaları, atıfla alıntı kopyalama (APA/MLA/IEEE), makalede bul, odak modu, sesli okuma, disleksi dostu yazı tipleri/aralık/okuma cetveli, yanlış dönüşümü düzeltme ve bildirme, orijinal sayfaya kalemle not, notları dosyayla paylaşma.
+- **Araştırma çalışma alanı**: okuma listesi (BibTeX, RIS, CSL-JSON içe aktarma), projeler ve literatür tablosu (makaleden sayfa atıflı öneri), tüm kütüphaneye kaynaklı soru, arXiv'de konu takibi.
+- **Dışa aktarma**: Obsidian kasası, Anki kartları, Readwise vurguları, işaretli PDF (vurgu, not, kalem, yer imleri).
+- **Folume'a gönder**: tarayıcı paylaşım menüsü (PWA), tarayıcı eklentisi, yer imi, `folume://import` bağlantısı.
+- **İsteğe bağlı OCR** (sunucuda `FOLUME_OCR=1`): taranmış PDF'ler okunur; sonuç her zaman “OCR ile tanındı” diye işaretlenir.
+- **Tasarım**: sıcak, editoryal bir görünüm (şeftali/teracotta, serif başlıklar) ve logo.
+
 ---
 
 ## Önerilen teknik yaklaşım
@@ -186,16 +198,17 @@ Farkımız tek bir özellik değil; okuma rahatlığını, kaynak güvenilirliğ
 
 🚧 **Çalışan prototip — henüz ürün değil**
 
-Üç fazın tamamı ve sonradan eklenenler (eksiksizlik denetimi, linkle içe aktarma, okuma biçimleri, biçim dönüştürme, makalede bul) uygulandı ve otomatik testlerden (backend, mobil birim, Playwright ile uçtan uca web akışları) geçiyor. Bu, ürünün hazır olduğu anlamına **gelmez**:
+Üç fazın tamamı ve sonradan eklenenler (eksiksizlik denetimi, linkle içe aktarma, okuma biçimleri, biçim dönüştürme, makalede bul, yeni tasarım ve logo, okurken önizleme/terim/sesli okuma, düzeltme ve kalem notları, okuma listesi, projeler ve literatür tablosu, kütüphaneye soru, arXiv takibi, Obsidian/Anki/Readwise ve işaretli PDF dışa aktarma, “Folume'a gönder”, isteğe bağlı OCR) uygulandı ve otomatik testlerden (backend, mobil birim, Playwright ile uçtan uca web akışları) geçiyor. Bu, ürünün hazır olduğu anlamına **gelmez**:
 
 - Ayrıştırıcı sentetik makaleler ve iki bağımsız araçla (LibreOffice, Chromium) üretilmiş PDF'lerle doğrulandı. **Gerçek akademik makalelerle denenmedi** (geliştirme ortamında erişilemedi).
 - Mobil uygulama web derlemesinde ve telefon boyutlu Chromium'da doğrulandı; Android/iOS paketleri derleniyor ama **cihazda çalıştırılmadı**.
 - AI özellikleri sahte bir OpenAI uyumlu sunucuyla sınandı; **gerçek bir model denenmedi**.
 - Anlama kazanımı, kullanıcı tercihi ve geri dönüş ölçütleri için **kullanıcı testi yapılmadı**.
-- “Bir harf bile eksik olmaz” iddiası **PDF'in metin katmanı** için geçerlidir ve sayılarak denetlenir; sentetik, LibreOffice ve Chromium PDF'lerinde bağımsız bir PDF motoru (pdfium) ve pandoc ile doğrulandı. Taranmış PDF'lerde (OCR yok) ya da yazının eğriye çevrildiği PDF'lerde metin katmanı yoktur; bunlar “desteklenmiyor” diye işaretlenir.
+- “Bir harf bile eksik olmaz” iddiası **PDF'in metin katmanı** için geçerlidir ve sayılarak denetlenir; sentetik, LibreOffice ve Chromium PDF'lerinde bağımsız bir PDF motoru (pdfium) ve pandoc ile doğrulandı. Taranmış PDF'lerde ya da yazının eğriye çevrildiği PDF'lerde metin katmanı yoktur: sunucuda OCR kapalıysa bunlar “desteklenmiyor” diye işaretlenir; OCR açıksa (`FOLUME_OCR=1`) metin tanınır, ama **bu metin PDF'in kendi metni değildir**, hiçbir zaman “eksiksiz ve doğru” denmez ve not en fazla “orta”dır. Varsayılan OCR modelleri Türkçe karakterleri (ğ ş ı İ ö ç) çoğunlukla düz harfe çevirir ([ayrıntı](docs/EVALUATION.md#26-ocr-isteğe-bağlı)).
 - Linkle içe aktarma yerel bir test sitesiyle sınandı; **gerçek arXiv/yayıncı sitelerine bu ortamda erişilemediği için denenmedi** (çözümleyici kuralları birim testlerle doğrulandı).
 - Dergi stili ve sayfa sayfa okuma yalnızca Chromium'da doğrulandı; cihaz WebView'ında denenmedi.
-- Kapsam dışı: OCR, LaTeX üretimi, 3+ sütunlu düzenlerde güvenilir okuma sırası.
+- Yeni özelliklerin dış dünyayla buluştuğu yerler **gerçek ortamda denenmedi**: arXiv takibi sahte bir arXiv sunucusuyla, tarayıcı eklentisi birim testleriyle (gerçek tarayıcıya yüklenmedi), PWA paylaşım hedefi manifest ve adres işleme testleriyle, Obsidian/Anki/Readwise dosyaları biçim testleriyle sınandı; gerçek uygulamalara aktarılmadı. İşaretli PDF'i pdfium ve poppler açar ve işaretleri doğru yerde çizer; vurgu konumları satır doğruluğunda **tahmindir** (dönüştürücü bloğun tamamı için tek kutu tutar).
+- Kapsam dışı: LaTeX üretimi, 3+ sütunlu düzenlerde güvenilir okuma sırası, makalenin tamamının Türkçe↔İngilizce yan yana çevirisi (bilinçli olarak yapılmadı).
 
 Sıradaki adım, küçük bir gerçek PDF seti ve gerçek kullanıcı testleriyle Book View kalitesini doğrulamaktır ([protokol](docs/EVALUATION.md#5-gerçek-pdf-seti-ile-doğrulama-protokolü-önerilen-sonraki-adım)).
 

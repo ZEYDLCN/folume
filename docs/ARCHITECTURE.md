@@ -67,7 +67,7 @@ Karşılaştırma birimi, Unicode NFKC sonrası harf ve rakamdır (büyük/küç
 - **Çıktı tarafı:** `prefix + text + inner_text` (her blok) + atlanan üst/alt bilginin metni (`OmittedRegion.text`).
 - **Kayıp yok:** bloklara yerleşmeyen karakterler `text_recovered` bayraklı bloklara geri konur; denetim yine de eksik/fazla harf bulursa `quality.completeness.problems` farkı bloğa (kaynak bbox'larıyla) atfeder.
 - **Bağımsız doğrulama:** testlerde belgenin harfleri pdfium'un okuduğu harflerle karşılaştırılır; denetimin kendisi de bozulmuş belgeyle sınanır (silinen metin yakalanır).
-- Taranmış PDF'de (metin katmanı yok) `complete=false` döner; “tamamdır” denmez.
+- Taranmış PDF'de (metin katmanı yok) `complete=false` döner; “tamamdır” denmez. OCR açıksa karşılaştırma OCR motorunun okuduğu harflerle yapılır (`completeness.source = "ocr"`): bu yalnızca “motorun okuduğu bir şey kaybolmadı” demektir, **metnin doğru olduğu anlamına gelmez**; istemci bunu hiçbir yerde “eksiksiz” diye göstermez (`completenessVerdict` → `ocr`).
 
 ## Bağlantıdan içe aktarma
 
@@ -114,6 +114,8 @@ Kullanıcıya ait her şey (notlar, vurgular, okuma durumu, test sonuçları, te
 
 ```text
 ann/{docId}/{id}   state/{docId}   quiz/{docId}/{id}   card/{docId}/{id}   tags/{docId}
+fix/{docId}/{blockId}   ink/{docId}/{page}               (makaleye ait: düzeltmeler, kalem çizgileri)
+proj/{id}   want/{id}   sub/{id}                          (okuyucuya ait: projeler, okuma listesi, takip edilen konular)
 { key, updatedAt, deleted, data }
 ```
 
@@ -127,6 +129,35 @@ ann/{docId}/{id}   state/{docId}   quiz/{docId}/{id}   card/{docId}/{id}   tags/
   boyut/adet sınırı uygular ve içerik yankılamaz. Varsayılan **kapalı**; PDF'ler ve makale metni senkronlanmaz.
   Bir makaleyi cihazdan silmek notlarını diğer cihazlardan silmez (“burada sil”).
 
+## Okurken etkileşimler (okuyucu runtime'ı ↔ uygulama)
+
+Okuyucu bir WebView/iframe içinde çalışan TypeScript paketidir; uygulama ile `reader/protocol.ts` iletileriyle konuşur (`HostMessage` / `ReaderEvent`). Metin hiçbir yerde HTML olarak yorumlanmaz.
+Atıf, şekil, tablo ve denklem bağlantıları `core/xref.ts`, terimler `knowledge/concepts.ts` ile bulunur ve metne **eleman olarak eklenir, harf eklenmez**; önizleme penceresi ve “geri dön” konumu uygulama tarafındadır.
+Sesli okuma `core/speech.ts` (cümle bölme, kuyruk) ve cihazın konuşma motoru ile; kalem çizgileri sayfa genişliğine oranlı noktalar olarak (`InkPage`) saklanır; düzeltmeler (`BlockFix`) belge paketini değiştirmez, okuyucuya bindirilir.
+
+## Projeler, soru ve takip (istemci + sunucu)
+
+- **Literatür tablosu** (`core/matrix.ts`): `Project` = makale kimlikleri + sütunlar + hücreler. Hücre önerisi cümle düzeyinde ipucu sözcükleriyle (sütun adı Türkçe/İngilizce türüne göre) makalenin kendi cümlesini seçer ve sayfasını ekler; eşleşme yoksa boş bırakır.
+- **Kütüphaneye soru** (`LibrarySearch.passages` → `knowledge/ask.ts` → `AiClient.explain`): makale başına en çok 3 pasaj, toplam ≤ 14, her pasaj kaynak makalesine (`docId:blockId`) bağlı kalır; gönderilecekler önizlenir ve aynı kaynak doğrulaması geçerlidir.
+- **arXiv takibi** (`backend/src/folume/feed.py`): sunucu yalnızca yapılandırılmış arXiv API adresine (`FOLUME_FEED_URL`, varsayılan `export.arxiv.org`) gider; çağıranın verdiği adrese **asla**. Aynı korumalı `Fetcher` kullanılır, Atom `DOCTYPE`/`ENTITY` içeriyorsa reddedilir, sorgu parçaları doğrulanır (kategori kalıbı, anahtar sözcükler yalnızca sözcüklere indirgenir), yanıtlar 15 dk önbelleğe alınır, istekler arasında ≥ 3 sn beklenir; arXiv yanıt vermezse eski yanıt `stale` olarak döner.
+
+## Başka uygulamalara dışa aktarma
+
+`core/export/notebooks.ts` (Obsidian kasası ZIP'i, Anki TSV, Readwise CSV) ve `core/export/annotatedPdf.ts`. Yazarın sözü ile okuyucunun/AI'nın sözü her biçimde ayrı etiketlenir (“AI-generated, not the authors' text”).
+**İşaretli PDF**: sayfa JPEG'leri değiştirilmeden eklenir (PDF 1.7, çapraz başvuru tablosu, `DCTDecode`); vurgular `Highlight` (QuadPoints + çarpma karışımlı görünüm akışı, not `Contents`'te UTF-16), tam blok notları `Text`, kalem çizgileri `Ink`, bölümler `Outlines`.
+Dönüştürücü blok için tek kutu tuttuğundan vurgu konumu, metnin kutuda eşit aktığı varsayımıyla **satır doğruluğunda tahmin**dir; alıntı ve not metin olarak da açıklamada durur. Sayfalar resim olduğundan bu kopya aranamaz; özgün PDF'e dokunulmaz.
+
+## Folume'a gönder
+
+Her yol aynı sonuca çıkar: kütüphane ekranı `?import=<makale>` ile açılır ve “bağlantıdan ekle” penceresi hazır gelir (`core/share.ts`). Tarayıcı paylaşım menüsü (`manifest.webmanifest` → `share_target`, GET `/?title&text&url`) metinden en iyi adayı seçer (arXiv > DOI > bağlantı), `javascript:`/`data:`/`file:` yok sayılır.
+`extension/` (MV3) yalnızca `activeTab`, `contextMenus`, `storage` ister, sayfaya betik enjekte etmez, uygulamanın kendi adresini yeni sekmede açar. Derin bağlantı: `folume://import?url=…` (`app/import.tsx`). Yerel paylaşım menüsünden (iOS/Android) alma yerel bir modül gerektirir ve **uygulanmadı**.
+
+## İsteğe bağlı OCR
+
+`FOLUME_OCR=1` ve `ocr` eklentisi kuruluysa, metin katmanı olmayan PDF sayfaları 200 dpi'de çizilir, RapidOCR (ONNX) ile okunur ve her satır kutusuna karakter karakter yayılır (kutu genişliği boşluklar dahil eşit paylaşılır); boyut kutu yüksekliğinden, taban çizgisi alt kenardan türetilir. Sonrası olağan hat (düzen → yapı → denetim) olur;
+`steady_sizes` ve `repair_line` başlık düzeni için yalnızca boşluk (ve “Abstract—” tire'si) ekler, **harf eklemez**. Not, motorun ortalama güveniyle çarpılır ve en çok 0,84'tür. İş zaman aşımı OCR aşamasında sayfa başınadır (`FOLUME_OCR_MAX_PAGES` sayfayı aşan tarama `ocr_too_many_pages` ile reddedilir; motor çökerse `ocr_failed`).
+Motor çağrısı kilitle sıralanır; iş başına ≈ 1 GB bellek beklenir.
+
 ## Dönüşüm süreçleri
 
 Sunucudaki her dönüşüm ayrı bir süreçte (`forkserver`) çalışır: ana süreç PDF baytlarını bir boruyla gönderir, ilerlemeyi borudan okur,
@@ -138,4 +169,5 @@ dizin temizlenir ve sunucu etkilenmez. PDF diske yazılmaz.
 - API anahtarı (`FOLUME_API_KEY`) tanımlıysa tüm `/v1` uçları `X-API-Key` ister.
 - Yükleme sınırları: boyut, sayfa sayısı, sayfa boyutu, `%PDF` imzası; dönüşüm başına süreç yalıtımı, zaman aşımı ve bellek sınırı.
 - AI geçidi içerik loglamaz; istek gövdeleri hata günlüklerine yazılmaz.
+- Sunucunun dışarı yaptığı tek istekler: kullanıcının istediği makale bağlantısı (korumalı indirici) ve arXiv takibi (yalnızca yapılandırılmış arXiv adresi, korumalı indirici, güvenli Atom ayrıştırma). `FOLUME_URL_IMPORT=0` ve `FOLUME_FEED=0` ikisini de kapatır.
 - Mobil istemci: AI ve görsel paylaşımı ayrı anahtarlar, varsayılan **kapalı**; ilk kullanımda açık onay.

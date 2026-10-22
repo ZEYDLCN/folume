@@ -17,6 +17,12 @@ Mimari kararlar için bkz. [ARCHITECTURE.md](ARCHITECTURE.md).
 | 7 — Okuma biçimleri | ✅ uygulandı (Kitap, Dergi, sayfa sayfa, Orijinal), Chromium'da doğrulandı | Cihaz WebView'ında denenmedi |
 | 8 — Biçim dönüştürme | ✅ uygulandı (EPUB, HTML, Markdown, TXT), pandoc ve tarayıcıyla doğrulandı | EPUB gerçek e-okuyucularda denenmedi |
 | 9 — Kullanım rahatlığı ve hız | ✅ uygulandı (makalede bul, devam et, kalan süre, odak modu; dönüştürücü ≈ %30 hızlandı) | Cihazda ölçülmedi |
+| 10 — Tasarım ve marka | ✅ uygulandı (sıcak editoryal tema, serif başlıklar, logo, uygulama simgeleri) | Cihazda görülmedi; Figma erişilemedi, tasarım verilen görselden kuruldu |
+| 11 — Okurken | ✅ uygulandı (önizleme, terim, atıfla alıntı, sesli okuma, erişilebilirlik, düzeltme, geri bildirim, kalem, not paylaşımı) | Sesli okuma cihaz seslerinde, kalem gerçek kalemle denenmedi |
+| 12 — Araştırma çalışma alanı | ✅ uygulandı (okuma listesi, BibTeX/RIS içe aktarma, projeler ve literatür tablosu, kütüphaneye soru, arXiv takibi) | arXiv takibi gerçek arXiv'e karşı, “soru” gerçek modelle denenmedi |
+| 13 — Dışa aktarma ve entegrasyon | ✅ uygulandı (tablo CSV/Excel, Obsidian, Anki, Readwise, işaretli PDF) | Gerçek Obsidian/Anki/Readwise'a aktarılmadı; PDF vurgu konumları tahmin |
+| 14 — Folume'a gönder | ✅ uygulandı (PWA paylaşım hedefi, tarayıcı eklentisi, yer imi, derin bağlantı) | Eklenti gerçek tarayıcıya yüklenmedi; yerel paylaşım menüsü denenmedi |
+| 15 — İsteğe bağlı OCR | ✅ uygulandı (`FOLUME_OCR=1`), gerçek motorla sınandı | Türkçe karakterler zayıf; sonuç asla “eksiksiz” denmez |
 
 Bilinçli olarak yapılmayanlar ve açık riskler: bu belgenin sonundaki “Kapsam dışı” ve [EVALUATION.md](EVALUATION.md) §4.
 
@@ -118,9 +124,34 @@ Her faz sonunda: testler yeşil, tip kontrolleri temiz, README onay kutuları ya
 - Makalede bul, “Okumaya devam et” kartı, kalan süre, odak modu, ilerlemenin sayfa/uygulama kapanırken kaydedilmesi.
 - Dönüştürücüde ikinci dereceden bir boyut hesabı kaldırıldı, parça metni bir kez hesaplanıyor (≈ %30, çıktı bayt bayt aynı). Hız bekçileri: dönüştürücü (`tests/test_performance.py`) ve 90 sayfalık makale için okuyucu bütçesi (`e2e/formats.mjs`).
 
+### Faz 10 — Tasarım ve marka
+- `mobile/src/ui/palette.ts` (şeftali/teracotta, koyu tema, WCAG AA kontrastı testli), serif başlıklar, krem yuvarlak kartlar, arama hapı, tarih çipli kütüphane, `Logo.tsx` + simgeler (`e2e/brand-assets.mjs`).
+
+### Faz 11 — Okurken
+- Şekil/tablo/denklem/kaynak önizlemesi ve “geri dön”, terim ve kısaltma açıklamaları, atıfla alıntı kopyalama, sesli okuma (cümle cümle, hız, durdur/sürdür), disleksi dostu yazı tipleri, aralık, okuma cetveli.
+- Yanlış dönüşümü düzeltme (blok metni/türü/gizleme/birleştirme; PDF tarafı değişmez, düzeltmeler eşzamanlanır), “yanlış dönüşümü bildir” paketi, orijinal sayfaya kalem/fosforlu kalem notları, notları dosyayla paylaşma.
+
+### Faz 12 — Araştırma çalışma alanı
+- Okuma listesi: BibTeX/RIS/CSL-JSON içe aktarma, elle DOI/arXiv/başlık, “kütüphaneye ekle”, okundu işareti, okurken kaynakçadan listeye ekleme.
+- Projeler ve literatür tablosu (`core/matrix.ts`): her makale bir satır, her soru bir sütun; hücre için makalenin **kendi cümlesi** sayfasıyla önerilir (uydurma yok); CSV/Excel/Markdown.
+- Kütüphaneye soru (`/ask`): BM25 ile tüm makalelerden pasajlar, kaynak doğrulamalı AI yanıtı (gönderilecekler önizlenir); AI kapalıyken eşleşen pasajlar listelenir.
+- arXiv takibi (`feed.py`, `/v1/feed/arxiv`): kategori ve/veya anahtar sözcük, “yeni” işareti, okuma listesine/kütüphaneye ekle; takip edilen konular senkronlanan `sub` kaydıdır.
+
+### Faz 13 — Dışa aktarma ve entegrasyon
+- `core/export/notebooks.ts`: Obsidian kasası (özellikler, sayfalı alıntılar, ilgili makalelere `[[bağlantılar]]`, kartlar), Anki (kararlı kimlikli TSV), Readwise CSV.
+- `core/export/annotatedPdf.ts`: orijinal sayfa görüntüleri + gerçek PDF açıklamaları (vurgu, not, kalem) + bölümlerden yer imleri; pdfium ve poppler ile doğrulanır.
+
+### Faz 14 — Folume'a gönder
+- Web: manifest + `share_target` (GET) + hizmet işçisi; `?import=`/`?url=&text=&title=` ve `/import?url=` (derin bağlantı) kütüphanede ekleme penceresini hazır açar.
+- `extension/` (MV3, yalnızca `activeTab`, `contextMenus`, `storage`) ve Ayarlar'dan kopyalanan yer imi.
+
+### Faz 15 — İsteğe bağlı OCR
+- `parsing/ocr.py` (RapidOCR/ONNX, `pip install -e ".[ocr]"`): metin katmanı olmayan PDF'ler sayfa görüntüsünden okunur; satırlar kutularına karakter karakter yayılır, başlıklardaki kaybolan boşluklar onarılır (harf eklenmez). `quality.ocr`, `completeness.source = "ocr"`, `ocr_text` uyarısı; not üst sınırı 0,84 (asla “iyi”).
+
 ## 3. Kapsam dışı (bilinçli)
 
-- OCR (taranmış PDF'ler algılanır ve açıkça "desteklenmiyor" diye işaretlenir; sessizce boş belge üretilmez).
+- Makalenin tamamının Türkçe↔İngilizce yan yana çevirisi (istenmedi; seçili metin için çeviri vardır).
+- OCR'de şekil/tablo algılama, sayfası yan dönmüş taramalar, metin ve tarama karışık PDF'ler (yalnızca neredeyse hiç metni olmayan PDF'ler OCR'lenir).
 - LaTeX üretimi (denklemler görüntü + yaklaşık metin olarak sunulur; hata yerine "yaklaşık" bayrağı).
 - Üç ve daha fazla sütunlu düzenlerde güvenilir okuma sırası (sayfa "düzen belirsiz" diye işaretlenir).
 - Hesap/oturum sistemi (senkron yalnızca anahtar tabanlıdır).

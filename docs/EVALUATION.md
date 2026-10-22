@@ -76,13 +76,35 @@ Android ve iOS için `expo export` (Hermes paketleme) başarıyla derlenir; bu *
 Ayrıca pdfium (hiçbir kodu paylaşmayan bir motor) PDF'ten okunan harfleri verir; belgede eksik harf yoktur (yalnızca üst üste basılmış kopyalar sayılır).
 Sonuç: 5 sentetik + LibreOffice (3) + Chromium (3) PDF'inde **0 eksik, 0 fazla harf**. Denetimin kendisi sınanır: bir paragrafın yarısını silmek ya da metin eklemek raporlanır;
 bir satırı düşüren hat, karakterleri `text_recovered` bloğu olarak geri koyar.
-**Sınır:** bu, PDF'in *metin katmanı* içindir. Metni eğriye çevrilmiş ya da tarama PDF'lerinde harf yoktur; bunlar “eksiksiz” denmez. Gerçek makalelerde denenmedi.
+**Sınır:** bu, PDF'in *metin katmanı* içindir. Metni eğriye çevrilmiş ya da tarama PDF'lerinde harf yoktur; bunlar “eksiksiz” denmez (OCR açıksa metin tanınır ama yine “eksiksiz” denmez, bkz. §2.6). Gerçek makalelerde denenmedi.
 
 **Biçim dönüştürme** (`mobile/src/core/export/paper.test.ts`, `e2e/export-flow.mjs`): her biçim (EPUB, HTML, Markdown, TXT) × 3 fikstür × (çıkarılanlar bölümü açık/kapalı) × (resimli/resimsiz) için:
 XML ayrıştırıcıyla (HTML ve EPUB iyi biçimli olmalı), markdown-it ile (Markdown) okunan harf çok kümesi belgeyle aynıdır; fazlalık yalnızca bildirilen etiketlerdir.
 Tarayıcı senaryosu uygulamadan gerçek indirmeleri alır ve **pandoc** ile (EPUB/HTML/Markdown'ı kendi okuyucusuyla) geri okur: 8 dosyanın tamamında eksik harf yok; EPUB paketi (mimetype ilk ve sıkıştırmasız, manifest↔dosyalar, spine, XHTML iyi biçimliliği, görüntü imzaları) Python ile,
 her bölüm gerçek bir tarayıcıyla (`application/xhtml+xml`, `parsererror` yok) doğrulanır. Kötü niyetli/tuhaf metin (`<script>`, `]]>`, kontrol karakterleri, yalnız vekil çift, `javascript:` bağlantısı) iyi biçimli çıktı verir.
 **Sınır:** EPUB gerçek e-okuyucularda (Apple Books, Kindle, Kobo) ve epubcheck ile denenmedi.
+
+### 2.6 OCR (isteğe bağlı)
+
+`backend/tests/test_ocr.py` (24 test): geometri, bayraklar, not üst sınırı, ilerleme, sayfa sınırı, `ocr_failed`, sayfa başına zaman aşımı — bir **sahte motorla her ortamda**; gerçek motor kurulu değilse 6 test atlanır.
+Gerçek motorla (RapidOCR 1.2.3 ONNX, varsayılan modeller, Python 3.13) 200 dpi'de `ieee_ml` 1–2. sayfa: **sözcük anması 0,947** (kesinlik 0,954); dört sentetik makalede sözcük 0,947–0,962, harf 0,97–0,98. Başlıklar, paragraflar bulunur.
+Hız: sayfa başına 5–9 sn (4 çekirdek, yük altında 12–15 sn), motor yükleme 0,6 sn, iş başına tepe ≈ 960 MB. 150 dpi ≈ %35 hızlı ama sözcük 0,91; 300 dpi kazanç sağlamadı. Eğik tarama (1°, 2,5°) 0,95; **bulanık + düşük kontrast + JPEG 30: 0,77** — motor yine de ortalama güven 0,90 bildirir, yani not yalnızca bir **tavandır**, ölçüm değil.
+Bağımlılık sürümü sabitlenmiştir (`rapidocr-onnxruntime>=1.2,<1.3`): 1.4.x (PP-OCRv4) sözcük aralarındaki boşlukların çoğunu düşürüp aynı taramada sözcük anmasını 0,95 → 0,28'e indirdi.
+**Türkçe:** varsayılan tanıyıcı sözlüğünde (6623 simge, Çince + İngilizce) ğ ş ı İ ö ç yok (yalnızca ü Ü); çıktı düz harfe döner. “Güneşli bir günde çocuklar şiir okuyup öğrenciler ışığa baktı.” → “Gunesli bir gunde cocuklar siir okuyup ogrenciler isiga bakti.”; 66 Türkçe harfin yalnızca 2'si doğru, altı satırda ortalama karakter hata oranı 0,39. Türkçe için Latin bir tanıyıcı model gerekir (1.2.x özel model yolunu kabul eder; burada indirilemedi). Arama da bundan etkilenir.
+**Bilinen sınırlar:** şekil/tablo algılanmaz (grafik etiketleri ve tablo hücreleri paragraf olur); italik/kalın olmayan alt başlıklar (“A. Problem Setup”) tanınmaz; noktalama çevresi boşlukları (kaynakçada) sık kaybolur; üst bilgi ancak her sayfada aynı okunursa atılır; başlık onarımı yalnızca İngilizce; yarım yamalak metinli PDF'ler OCR'lenmez; yan dönmüş sayfalar yoktur.
+
+### 2.7 Araştırma çalışma alanı, dışa aktarma ve gönderme
+
+| Özellik | Nasıl doğrulandı | Ne denenmedi |
+|---|---|---|
+| Literatür tablosu önerisi | Birim testleri: önerilen metin her zaman bloğun kendi metninin alt dizgisi, sayfası bloğunki; üç fikstürde yöntem/veri/sonuç/sınırlılık | Gerçek makalelerde öneri kalitesi (sentetik makaleler şablonludur) |
+| Kütüphaneye soru | Birim: pasaj seçimi, makale başına sınır, bütçe; e2e: önizleme, tek model çağrısı, kaynak çipi makaleye gider, AI kapalıyken hiçbir şey gitmez | Gerçek modelle yanıt kalitesi |
+| arXiv takibi | Backend: Atom ayrıştırma (DOCTYPE/ENTITY reddi, sorgu sızdırma denemeleri, önbellek, aralık, eski yanıt, özel adres, boyut sınırı, API anahtarı); e2e: **sahte arXiv sunucusu** | **Gerçek arXiv** (ağ yok); yanıt biçimi arXiv belgelerine göre yazıldı |
+| BibTeX/RIS/CSL-JSON içe aktarma | Birim testleri, elle yazılmış Zotero/Mendeley tarzı örnekler | Gerçek Zotero/Mendeley dışa aktarımları |
+| Obsidian / Anki / Readwise | Biçim testleri (özellik bloğu, `[[bağlantı]]`, Anki yönergeleri ve kararlı kimlik, Readwise sütunları, formül enjeksiyonu), e2e'de gerçek indirme | **Gerçek uygulamalara aktarma** |
+| İşaretli PDF | Birim: yapı (çapraz başvuru, `Length`), koordinat çevirisi, UTF-16 not, yer imleri; e2e: **pdfium** (sayfa, yer imi, not metni, vurgunun ve kalemin değiştirdiği pikseller blok kutusunda/çizgi boyunca, vurgu sarı) ve **poppler** (şikâyetsiz) | Acrobat/Preview/telefon görüntüleyicileri; vurgunun satır içi konumu **tahmindir** (±1 satır) |
+| PWA paylaşım hedefi, yer imi, derin bağlantı | e2e: manifest, simgeler, hizmet işçisi, adresle gelen paylaşım → hazır ekleme penceresi, yer imi kodunun çalıştırılması | Gerçek “Paylaş” menüsü ve yükleme (Chromium başsız) |
+| Tarayıcı eklentisi | `node --test`: adres temizleme, hedef seçimi, manifest izinleri | Gerçek tarayıcıya yükleme |
 
 ### 2.4 Dayanıklılık
 
@@ -116,7 +138,7 @@ Okuyucu şekil/sayfa görüntülerini tembel yükler. 90 sayfalık (1.680 bloklu
 - **Gerçek LLM.** Sağlayıcı soyutlaması ve bütün güvenlik/atıf mantığı sahte bir OpenAI uyumlu sunucuyla sınandı; gerçek model çıktılarının biçimi, gecikmesi ve kalitesi sınanmadı.
 - **Docling.** İndirme yapılamadığı için denenmedi; ayrıştırıcı arayüzü onu takmaya elverişlidir.
 - **Kavram çıkarımı.** Kurallı (kısaltma, tanım kalıpları, vurgulu terimler, anahtar sözcükler, sık geçen isim öbekleri). Sentetik makalelerde sağlıklı çalışıyor; gerçek makalelerde gürültü ve kaçırma beklenir. Arayüz bunu açıkça söyler ve her satırı kaynağa bağlar.
-- **Karmaşık düzenler.** Üç ve daha çok sütun, döndürülmüş sayfalar, taranmış PDF (OCR yok): “düzen belirsiz”/“desteklenmiyor” olarak işaretlenir; sessizce yanlış sonuç üretilmez.
+- **Karmaşık düzenler.** Üç ve daha çok sütun, döndürülmüş sayfalar, taranmış PDF (OCR kapalıyken): “düzen belirsiz”/“desteklenmiyor” olarak işaretlenir; sessizce yanlış sonuç üretilmez. OCR'ün sınırları için §2.6.
 - **Dergi stili ve sayfa sayfa okuma** yalnızca Chromium'da sınandı; cihaz WebView'ında (özellikle CSS sütunları ve `dvh` birimleri) davranış doğrulanmadı.
 - **Linkle içe aktarma** gerçek arXiv/yayıncı sitelerine karşı denenmedi (ağ kısıtlı): çözümleyici kuralları ve indirici, yerel bir test sitesi ve sahte DNS ile sınandı. Yayıncı sitelerinin bot korumaları ve giriş duvarları “indirilemedi” hatası verir.
 - **Senkron.** Sunucu kayıtları düz metin saklar; son yazan kazanır (aynı kaydı iki cihaz eşzamanlı düzenlerse eski kalan kaybolur). Kayıt başına son-yazan-kazanır olduğundan okuma durumunda eşzamanlı yer imleri birleştirilmez.
