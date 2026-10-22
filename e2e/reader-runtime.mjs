@@ -76,8 +76,9 @@ await check('tapping a citation shows the reference and can jump to it', async (
   const text = await r.waitFor(() => r.page.evaluate(() => document.querySelector('.sheet .rt')?.textContent), 'citation sheet');
   assert(/Nature Methods|Proc\.|J\. Mach/.test(text), text);
   const y0 = await r.page.evaluate(() => scrollY);
-  await r.page.evaluate(() => document.querySelector('.sheet [data-act=go]').click());
+  await r.page.locator('.sheet button', { hasText: 'Kaynakçaya git' }).click();
   await r.waitFor(async () => (await r.page.evaluate(() => scrollY)) > y0 + 500, 'scroll to reference');
+  assert(await r.page.evaluate(() => !!document.querySelector('.pill.back')), 'following a reference leaves a way back');
   assert(await r.page.evaluate(() => !document.querySelector('.sheet')), 'sheet closed');
   await r.close();
 });
@@ -247,6 +248,82 @@ await check('block taps select the block and notify the host; a second tap clear
   assert(ev.blockId === para.id && ev.rect.width > 0, JSON.stringify(ev));
   await r.page.evaluate((id) => document.querySelector(`#${id} .bt`).click(), para.id);
   await r.waitFor(async () => (await r.events()).some((e) => e.type === 'selection-clear'), 'selection-clear');
+  await r.close();
+});
+
+await check('"Fig. 1", "Table I" and "Eq. (3)" in the text open a preview of what they name, and Back returns', async () => {
+  const r = await openReader(browser, bundle);
+  const keys = await r.page.evaluate(() => [...document.querySelectorAll('#book a.xref')].map((a) => a.dataset.x));
+  for (const k of ['fig:1', 'fig:2', 'tab:1', 'eq:3']) assert(keys.includes(k), `link for ${k} in ${keys}`);
+  // the text itself is untouched: links add elements, never characters
+  const same = await r.page.evaluate((d) => d.blocks.filter((b) => b.type === 'paragraph').every((b) => (document.getElementById(b.id)?.querySelector('.bt')?.textContent ?? '') === (b.spans.length ? b.spans.map((s) => s.text).join('') : b.text)), doc);
+  assert(same, 'paragraph text changed');
+  const figure = doc.blocks.find((b) => b.type === 'figure' && b.number === '1');
+  // scroll somewhere that is not the figure, then follow the link
+  await r.host({ type: 'goto', blockId: doc.blocks.find((b) => b.type === 'paragraph' && /Fig\. 1/.test(b.text)).id });
+  await r.page.waitForTimeout(400);
+  const before = await r.page.evaluate(() => window.scrollY);
+  await r.page.locator('#book a.xref[data-x="fig:1"]').first().click();
+  await r.page.locator('.sheet .xpreview figure').waitFor();
+  assert((await r.page.locator('.sheet .xpreview img').count()) === 1, 'figure image in the preview');
+  assert((await r.page.evaluate((id) => document.querySelectorAll(`[id="${id}"]`).length, figure.id)) === 1, 'the preview must not duplicate the block id');
+  assert((await r.page.locator('.sheet .xpreview figcaption').textContent()).includes('Fig. 1'), 'caption shown');
+  await r.page.locator('.sheet button', { hasText: 'Oraya git' }).click();
+  await r.page.waitForTimeout(500);
+  const moved = await r.page.evaluate(() => window.scrollY);
+  assert(Math.abs(moved - before) > 100, `did not move (${before} -> ${moved})`);
+  await r.page.locator('.pill.back').waitFor();
+  assert((await r.page.locator('.pill.back').textContent()).includes('Geri'), 'back pill label');
+  await r.page.locator('.pill.back').click();
+  await r.page.waitForTimeout(500);
+  const back = await r.page.evaluate(() => window.scrollY);
+  assert(Math.abs(back - before) < 40, `back is at ${back}, was ${before}`);
+  assert((await r.page.locator('.pill.back').count()) === 0, 'the back pill goes away once used');
+  // a table and an equation preview too
+  await r.page.locator('#book a.xref[data-x="tab:1"]').first().click();
+  await r.page.locator('.sheet .xpreview table').waitFor();
+  await r.page.locator('.sheet button', { hasText: 'Kapat' }).click();
+  await r.page.locator('#book a.xref[data-x="eq:3"]').first().click();
+  await r.page.locator('.sheet .xpreview .eq').waitFor();
+  await r.page.screenshot({ path: path.join(shots, 'rt-xref-equation.png') });
+  await r.close();
+});
+
+await check('terms the paper defines are underlined and explained, without changing the text', async () => {
+  const r = await openReader(browser, bundle);
+  const textOf = () => r.page.evaluate(() => [...document.querySelectorAll('#book [data-b]')].map((n) => n.textContent).join('\n'));
+  const before = await textOf();
+  const host = doc.blocks.find((b) => b.type === 'paragraph' && /expert gating/i.test(b.text));
+  await r.host({ type: 'terms', items: [{ term: 'expert gating', definition: 'A routing rule that picks one expert per token.', blockId: host.id, page: 1 }, { term: 'WTP', definition: 'never appears', blockId: host.id, page: 1 }] });
+  await r.page.locator('#book abbr.term').first().waitFor();
+  assert((await r.page.locator('#book abbr.term').count()) >= 3, 'occurrences underlined');
+  assert((await textOf()) === before, 'terms must not change any character');
+  await r.page.locator('#book abbr.term').first().click();
+  assert((await r.page.locator('.sheet .termhead').textContent()).toLowerCase() === 'expert gating', 'term title');
+  assert((await r.page.locator('.sheet .termdef').textContent()).includes('routing rule'), 'definition');
+  assert((await r.page.locator('.sheet .termwhere').textContent()).includes('Sayfa 1'), 'where it is defined');
+  await r.page.locator('.sheet button', { hasText: 'Kapat' }).click();
+  // highlights still paint across the underlined words, and the text stays whole
+  await r.host({ type: 'highlights', items: [{ id: 'h1', blockId: host.id, start: 0, end: 40, color: '#ffe58a', hasNote: false }] });
+  await r.page.locator('mark.hl').first().waitFor();
+  assert((await textOf()) === before, 'text after painting a highlight');
+  await r.close();
+});
+
+await check('a reference offers its DOI and adding it to the library', async () => {
+  const withDoi = structuredClone(doc);
+  const ref = withDoi.blocks.find((b) => b.type === 'reference');
+  ref.reference = { ...(ref.reference ?? {}), doi: '10.1000/abc123', url: null, title: ref.text.slice(0, 30), label: null, first_author: null, year: null };
+  const r = await openReader(browser, { ...bundle, doc: withDoi });
+  const cite = await r.page.evaluate((id) => !!document.querySelector(`#book a.cite[data-refs~="${id}"]`), ref.id);
+  assert(cite, 'a paragraph cites that reference');
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: "DOI'yi aç" }).click();
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: 'Kütüphaneye ekle' }).click();
+  const events = await r.events();
+  assert(events.some((e) => e.type === 'link' && e.url === 'https://doi.org/10.1000/abc123'), 'link event');
+  assert(events.some((e) => e.type === 'import-ref' && e.doi === '10.1000/abc123'), 'import-ref event');
   await r.close();
 });
 

@@ -1,4 +1,5 @@
 import type { Block, Document } from '../../src/core/types';
+import { buildXrefIndex } from '../../src/core/xref';
 import type {
   Anchor,
   HighlightView,
@@ -7,10 +8,12 @@ import type {
   ReaderMode,
   ReaderSettings,
   ReaderStrings,
+  TermView,
 } from '../../src/reader/protocol';
 import { clamp, el, post, rectOf } from './dom';
 import { offsetWithin, paintHighlights, textRoot } from './highlights';
-import { renderBook, renderOriginal, type RenderCtx } from './render';
+import { markTerms } from './inline';
+import { renderBlock, renderBook, renderOriginal, type RenderCtx } from './render';
 import { CSS } from './styles';
 
 interface State {
@@ -28,6 +31,10 @@ interface State {
   originalBlock: string | null;
   lastProgressAt: number;
   lastAnchor: string | null;
+  xrefs: Map<string, string>;
+  terms: TermView[];
+  /** where the reader was before following a link, newest last */
+  back: { id: string; offset: number }[];
 }
 
 const state: State = {
@@ -45,11 +52,15 @@ const state: State = {
   originalBlock: null,
   lastProgressAt: 0,
   lastAnchor: null,
+  xrefs: new Map(),
+  terms: [],
+  back: [],
 };
 
 let io: IntersectionObserver | null = null;
 let sheet: HTMLElement | null = null;
 let pill: HTMLElement | null = null;
+let backPill: HTMLElement | null = null;
 
 // ---------------------------------------------------------------------------------------- helpers
 
@@ -62,6 +73,7 @@ const ctx = (): RenderCtx => ({
   strings: state.strings as ReaderStrings,
   settings: state.settings as ReaderSettings,
   bookmarks: state.bookmarks,
+  xrefs: state.xrefs,
 });
 
 function blockEl(id: string): HTMLElement | null {
@@ -388,6 +400,7 @@ function setMode(mode: ReaderMode, blockId?: string): void {
     state.mode = 'original';
     syncClasses();
     hidePill();
+    updateBackPill();
     const page = id ? pageOf(id) : 1;
     gotoPage(page);
     showRegions(id);
@@ -402,6 +415,7 @@ function setMode(mode: ReaderMode, blockId?: string): void {
     state.mode = 'book';
     syncClasses();
     hidePill();
+    updateBackPill();
     if (id) gotoBlock(id, 0, true);
     post({ type: 'mode-changed', mode, blockId: id });
     reportProgress(true);
@@ -424,31 +438,96 @@ function closeSheet(): void {
   sheet = null;
 }
 
-function showCitation(refIds: string[]): void {
+function updateBackPill(): void {
+  backPill?.remove();
+  backPill = null;
+  if (!state.back.length || state.mode !== 'book') return;
+  backPill = el('button', 'pill back', null, `↩ ${state.strings?.back ?? ''}`);
+  backPill.addEventListener('click', () => {
+    const to = state.back.pop();
+    if (to) gotoBlock(to.id, to.offset);
+    updateBackPill();
+    reportProgress(true);
+  });
+  document.body.append(backPill);
+}
+
+/** Jumps to a block the reader followed a link to, remembering where it came from so "Back" can return. */
+function follow(id: string): void {
+  const here = topBlock();
+  if (here && state.back[state.back.length - 1]?.id !== here.id) state.back.push(here);
+  if (state.back.length > 20) state.back.shift();
+  gotoBlock(id, 0, true);
+  updateBackPill();
+}
+
+function sheetWith(...children: (Node | null)[]): HTMLElement {
   closeSheet();
-  const strings = state.strings as ReaderStrings;
   sheet = el('div', 'sheet', null);
+  for (const c of children) if (c) sheet.append(c);
+  document.body.append(sheet);
+  return sheet;
+}
+
+function sheetActions(buttons: [string, () => void][]): HTMLElement {
+  const bar = el('div', 'actions', null);
+  for (const [label, run] of buttons) {
+    const b = el('button', null, null, label);
+    b.addEventListener('click', run);
+    bar.append(b);
+  }
+  return bar;
+}
+
+function showCitation(refIds: string[]): void {
+  const strings = state.strings as ReaderStrings;
+  const items: HTMLElement[] = [];
   for (const id of refIds) {
     const b = state.byId.get(id);
-    if (!b) continue;
-    sheet.append(el('div', 'ref', null, el('span', 'rl', null, b.number ?? ''), el('div', 'rt', null, b.text)));
+    if (b) items.push(el('div', 'ref', null, el('span', 'rl', null, b.number ?? ''), el('div', 'rt', null, b.text)));
   }
   const first = refIds[0];
-  sheet.append(
-    el('div', 'actions', null,
-      el('button', null, { 'data-act': 'go' }, strings.go_to_reference),
-      el('button', null, { 'data-act': 'close' }, strings.close)),
+  const info = state.byId.get(first)?.reference;
+  const buttons: [string, () => void][] = [];
+  if (first) buttons.push([strings.go_to_reference, () => { closeSheet(); follow(first); }]);
+  if (info?.doi) buttons.push([strings.open_doi, () => post({ type: 'link', url: `https://doi.org/${info.doi}` })]);
+  if (info && (info.doi || info.url)) {
+    buttons.push([strings.add_to_library, () => { closeSheet(); post({ type: 'import-ref', doi: info.doi, url: info.url, title: info.title }); }]);
+  }
+  buttons.push([strings.close, closeSheet]);
+  sheetWith(...items, sheetActions(buttons));
+}
+
+/** What "Fig. 2", "Table I" or "Eq. (3)" points at, shown without leaving the place being read. */
+function showXref(key: string): void {
+  const id = state.xrefs.get(key);
+  const target = id ? state.byId.get(id) : null;
+  if (!id || !target) return;
+  const strings = state.strings as ReaderStrings;
+  const node = renderBlock(target, ctx());
+  const preview = el('div', 'xpreview', null);
+  if (node) {
+    // the copy must not take over the block's id, or finding the block in the text would find this one
+    node.querySelectorAll('[id],[data-b]').forEach((n) => { n.removeAttribute('id'); n.removeAttribute('data-b'); });
+    node.removeAttribute('id');
+    node.removeAttribute('data-b');
+    node.querySelectorAll('.flagdot').forEach((n) => n.remove());
+    node.querySelectorAll<HTMLImageElement>('img[data-asset]').forEach(loadAsset);
+    preview.append(node);
+  }
+  sheetWith(preview, sheetActions([[strings.go_to, () => { closeSheet(); follow(id); }], [strings.close, closeSheet]]));
+}
+
+function showTerm(index: number): void {
+  const t = state.terms[index];
+  if (!t) return;
+  const strings = state.strings as ReaderStrings;
+  sheetWith(
+    el('div', 'termhead', null, t.term),
+    el('div', 'termdef', null, t.definition),
+    el('div', 'termwhere', null, strings.defined_on.replace('{n}', String(t.page))),
+    sheetActions([[strings.go_to_definition, () => { closeSheet(); follow(t.blockId); }], [strings.close, closeSheet]]),
   );
-  sheet.addEventListener('click', (e) => {
-    const act = (e.target as HTMLElement).dataset.act;
-    if (act === 'go' && first) {
-      closeSheet();
-      gotoBlock(first, 0, true);
-    } else if (act === 'close') {
-      closeSheet();
-    }
-  });
-  document.body.append(sheet);
 }
 
 function openZoom(img: HTMLImageElement): void {
@@ -480,6 +559,16 @@ function onBookClick(e: MouseEvent): void {
     const x = e.clientX / window.innerWidth;
     if (x < 0.22) return turnPage('prev');
     if (x > 0.78) return turnPage('next');
+  }
+  const xref = t.closest<HTMLElement>('a.xref');
+  if (xref?.dataset.x) {
+    showXref(xref.dataset.x);
+    return;
+  }
+  const term = t.closest<HTMLElement>('abbr.term');
+  if (term?.dataset.t) {
+    showTerm(Number(term.dataset.t));
+    return;
   }
   const cite = t.closest<HTMLElement>('a.cite');
   if (cite) {
@@ -592,6 +681,7 @@ function rerender(): void {
   }, { passive: true });
   origEl()?.addEventListener('click', onOriginalTap);
   observeImages();
+  if (state.terms.length) markTerms(document, state.terms);
   paintHighlights(state.highlights);
   if (anchor) gotoBlock(anchor.id, anchor.offset);
   if (state.selectedBlock) selectBlock(state.selectedBlock);
@@ -608,6 +698,9 @@ function init(msg: InitMessage): void {
       state.pageBlocks.set(page, list);
     }
   }
+  state.xrefs = buildXrefIndex(msg.doc.blocks);
+  state.terms = [];
+  state.back = [];
   state.strings = msg.strings;
   state.mode = msg.mode;
   state.bookmarks = new Set(msg.bookmarks);
@@ -670,6 +763,11 @@ function handle(msg: HostMessage): void {
     case 'highlights':
       state.highlights = msg.items;
       paintHighlights(msg.items);
+      break;
+    case 'terms':
+      state.terms = msg.items;
+      markTerms(document, msg.items);
+      paintHighlights(state.highlights);
       break;
     case 'clear-selection':
       window.getSelection()?.removeAllRanges();

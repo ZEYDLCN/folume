@@ -64,6 +64,21 @@ export interface ReaderStrings {
   check: string;
   check_hint: string;
   check_start: string;
+  back: string;
+  go_to: string;
+  open_doi: string;
+  add_to_library: string;
+  /** "Defined on page {n}" */
+  defined_on: string;
+  go_to_definition: string;
+}
+
+/** A term the paper defines, and where: shown when it is tapped in the text. */
+export interface TermView {
+  term: string;
+  definition: string;
+  blockId: string;
+  page: number;
 }
 
 export interface Anchor {
@@ -106,6 +121,7 @@ export type HostMessage =
   | { type: 'asset'; path: string; uri: string }
   | { type: 'bookmarks'; ids: string[] }
   | { type: 'highlights'; items: HighlightView[] }
+  | { type: 'terms'; items: TermView[] }
   | { type: 'clear-selection' }
   | { type: 'highlight-block'; blockId: string | null };
 
@@ -136,6 +152,8 @@ export type ReaderEvent =
   | { type: 'quiz'; sectionId: string }
   | { type: 'highlight-tap'; id: string; rect: SelectionRect }
   | { type: 'link'; url: string }
+  /** the reader asks to add a paper from the reference list to the library */
+  | { type: 'import-ref'; doi: string | null; url: string | null; title: string | null }
   | { type: 'mode-changed'; mode: ReaderMode; blockId: string | null }
   | { type: 'log'; level: 'error' | 'warn' | 'info'; message: string };
 

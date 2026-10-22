@@ -43,6 +43,7 @@ const llmRequests = async () => (await fetch(`http://127.0.0.1:${LLM}/__requests
 
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'en-US', acceptDownloads: true });
+await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -162,6 +163,16 @@ await check('highlights are painted, persist across a reload and appear in the n
   await frameLoc().locator('#book .h').first().waitFor({ timeout: 20000 });
   await frameLoc().locator('mark.hl').first().waitFor({ timeout: 10000 });
   await shot('05-highlight');
+});
+
+await check('selected text is copied with its citation in the chosen style', async () => {
+  const quote = await selectInParagraph(0, 60);
+  await page.getByTestId('sel-copy-cite').click();
+  await page.waitForFunction(() => /Copied/.test(document.querySelector('[data-testid=selection-bar]')?.textContent ?? ''), null, { timeout: 5000 });
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  assert(copied.startsWith(`“${quote.replace(/\s+/g, ' ').trim()}”`), copied);
+  assert(/\(Rossi et al\., n\.d\., p\. \d+\)/.test(copied), `APA in-text citation: ${copied}`);
+  assert(/Rossi, Q\., Larsen, Q\., & Cohen, D\. \(n\.d\.\)\. Sparse Routing for Efficient Transformers\./.test(copied), `APA reference: ${copied}`);
 });
 
 await check('a note is attached to the selected text and saved on the device', async () => {

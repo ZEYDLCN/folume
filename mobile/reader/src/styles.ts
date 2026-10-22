@@ -36,6 +36,8 @@ h2.h{font-size:1.25em}h3.h{font-size:1.1em}h4.h{font-size:1em;font-style:italic}
 .blk[data-label]::before{content:attr(data-label);display:block;font:700 .66em var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4em}
 a.cite{color:var(--accent);text-decoration:none;border-radius:3px;padding:0 1px}
 a.link{color:var(--accent)}
+a.xref{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+abbr.term{text-decoration:none;border-bottom:1px dotted var(--muted);cursor:help}
 .m{font-family:'STIX Two Math','Cambria Math','Times New Roman',serif;font-style:italic}
 code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em}
 pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;overflow-x:auto;line-height:1.45;white-space:pre}
@@ -91,9 +93,12 @@ body.original #orig{display:block}
 .sheet{position:fixed;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 12px);z-index:40;background:var(--card);color:var(--fg);
   border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.28);font:14px/1.45 var(--sans);
   max-height:46vh;overflow:auto}
+.termhead{font-weight:700;font-size:15px;margin-bottom:4px}.termdef{margin:2px 0 6px}.termwhere{color:var(--muted);font-size:12px}
+.xpreview .blk{margin:0}.xpreview .fig,.xpreview .tbl,.xpreview .eq{margin:0}
 .sheet .ref{font-size:13px;margin:0 0 8px}
 .sheet .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 .sheet button{font:600 13px var(--sans);color:var(--accent);background:transparent;border:0;padding:6px 8px}
+.pill.back{left:14px;right:auto;transform:none;background:var(--card);color:var(--fg);border:1px solid var(--border);z-index:35}
 .pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:30;border:0;border-radius:999px;
   padding:10px 16px;font:600 13px var(--sans);color:#fff;background:#1d2433;box-shadow:0 4px 16px rgba(0,0,0,.35)}
 /* ---------------------------------------------------------------- magazine layout */

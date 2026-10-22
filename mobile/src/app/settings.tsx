@@ -1,3 +1,4 @@
+import type { CitationStyle } from '@/core/quote';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
@@ -149,6 +150,17 @@ export default function SettingsScreen() {
                 { value: 'auto', label: t('settings.language.auto') },
                 { value: 'tr', label: 'Türkçe' },
                 { value: 'en', label: 'English' },
+              ]}
+            />
+          </Field>
+          <Field label={t('settings.citationStyle')} hint={t('settings.citationStyle.hint')}>
+            <Segmented<CitationStyle>
+              value={s.citationStyle}
+              onChange={(citationStyle) => void s.update({ citationStyle })}
+              options={[
+                { value: 'apa', label: 'APA' },
+                { value: 'mla', label: 'MLA' },
+                { value: 'ieee', label: 'IEEE' },
               ]}
             />
           </Field>

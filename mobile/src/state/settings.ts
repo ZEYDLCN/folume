@@ -1,3 +1,4 @@
+import type { CitationStyle } from '@/core/quote';
 import { Platform } from 'react-native';
 import { create } from 'zustand';
 
@@ -44,6 +45,8 @@ export interface AppSettings {
   syncKey: string;
   locale: LocaleSetting;
   appTheme: AppTheme;
+  /** the style "copy with citation" writes */
+  citationStyle: CitationStyle;
   reader: ReaderSettings;
   ai: AiPrefs;
   sync: SyncPrefs;
@@ -58,6 +61,7 @@ export const defaultSettings = (): AppSettings => ({
   syncKey: '',
   locale: 'auto',
   appTheme: 'system',
+  citationStyle: 'apa',
   reader: DEFAULT_READER_SETTINGS,
   ai: DEFAULT_AI_PREFS,
   sync: DEFAULT_SYNC_PREFS,

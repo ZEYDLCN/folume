@@ -13,6 +13,8 @@ export function SelectionBar({
   onExplain,
   onHighlight,
   onNote,
+  onCopyCite,
+  copied,
   onClose,
   aiOn,
 }: {
@@ -22,6 +24,9 @@ export function SelectionBar({
   onExplain: () => void;
   onHighlight: () => void;
   onNote: () => void;
+  onCopyCite: () => void;
+  /** shows "copied" for a moment after copying */
+  copied: boolean;
   onClose: () => void;
   aiOn: boolean;
 }) {
@@ -52,7 +57,7 @@ export function SelectionBar({
       }}
     >
       <AppText variant="caption" muted numberOfLines={1}>
-        “{text}”
+        {copied ? t('sel.copied') : `“${text}”`}
       </AppText>
       <Row style={{ justifyContent: 'space-between' }}>
         <Row style={{ gap: 6 }}>
@@ -78,6 +83,7 @@ export function SelectionBar({
           <IconButton icon="color-wand-outline" label={t('sel.explain')} onPress={onExplain} testID="sel-explain" active={aiOn} />
           <IconButton icon="brush-outline" label={t('sel.highlight')} onPress={onHighlight} testID="sel-highlight" />
           <IconButton icon="create-outline" label={t('sel.note')} onPress={onNote} testID="sel-note" />
+          <IconButton icon="copy-outline" label={t('sel.copyCite')} onPress={onCopyCite} testID="sel-copy-cite" />
           <IconButton icon="close" label={t('common.close')} onPress={onClose} />
         </Row>
       </Row>

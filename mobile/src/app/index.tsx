@@ -1,5 +1,5 @@
-import { useFocusEffect, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -29,8 +29,19 @@ export default function LibraryScreen() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [tagging, setTagging] = useState<LibraryEntry | null>(null);
   const [linkOpen, setLinkOpen] = useState(false);
+  const [linkInitial, setLinkInitial] = useState('');
+  const params = useLocalSearchParams<{ import?: string }>();
   const [due, setDue] = useState(0);
   const lastSource = useRef<PdfSource | null>(null);
+
+  // a link, DOI or arXiv id handed over by a reference list, a shared link or the browser extension
+  const requested = Array.isArray(params.import) ? params.import[0] : params.import;
+  useEffect(() => {
+    if (!requested) return;
+    setLinkInitial(requested);
+    setLinkOpen(true);
+    router.setParams({ import: undefined });
+  }, [requested, router]);
 
   const refresh = useCallback(async () => {
     const stores = getStores();
@@ -257,6 +268,7 @@ export default function LibraryScreen() {
 
       <LinkSheet
         visible={linkOpen}
+        initial={linkInitial}
         onClose={() => setLinkOpen(false)}
         onSubmit={(url, label) => {
           setLinkOpen(false);

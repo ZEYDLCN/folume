@@ -5,6 +5,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { safeExternalUrl } from '@/core/links';
 import { indexDocument, readingMinutes, titleOf, type DocIndex } from '@/core/docModel';
+import { citationSourceOf } from '@/core/export/citations';
+import { formatQuote } from '@/core/quote';
+import { copyText } from '@/services/clipboard';
 import type { FindHit } from '@/core/find';
 import type { Document } from '@/core/types';
 import type { DocState } from '@/data/library';
@@ -22,7 +25,7 @@ import type { ReaderEvent, ReaderMode } from '@/reader/protocol';
 import type { HighlightView } from '@/reader/protocol';
 import { ReaderView, type ReaderViewHandle } from '@/reader/ReaderView';
 import { readerStrings } from '@/reader/strings';
-import { getStores } from '@/services/container';
+import { getKnowledge, getStores } from '@/services/container';
 import { useSettings, useLocale } from '@/state/settings';
 import { AppText, Button, IconButton, ProgressBar, Segmented, Sheet, type IconName } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
@@ -58,6 +61,8 @@ export default function ReaderScreen() {
   const [found, setFound] = useState<FindHit | null>(null);
   const [focusMode, setFocusMode] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const citationStyle = useSettings((s) => s.citationStyle);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selection, setSelection] = useState<{ blockId: string; start: number; end: number; text: string } | null>(null);
   const [color, setColor] = useState<string>(HIGHLIGHT_COLORS[0].value);
@@ -66,6 +71,7 @@ export default function ReaderScreen() {
   const [noteFor, setNoteFor] = useState<{ mode: 'new'; sel: { blockId: string; start: number; end: number; text: string } } | { mode: 'edit'; id: string } | null>(null);
   const reader = useRef<ReaderViewHandle>(null);
   const pending = useRef<Partial<DocState> | null>(null);
+  const termsSent = useRef(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const requestedBlock = first(params.block);
@@ -180,6 +186,16 @@ export default function ReaderScreen() {
     (e: ReaderEvent) => {
       switch (e.type) {
         case 'progress':
+          if (!termsSent.current) {
+            // the runtime has laid the paper out: now it can underline the terms the paper defines
+            termsSent.current = true;
+            void getKnowledge().conceptsOf(id).then((list) => {
+              const items = list.flatMap((c) =>
+                c.definition ? [c.term, ...c.aliases].map((term) => ({ term, definition: c.definition!.text, blockId: c.definition!.blockId, page: c.definition!.page })) : [],
+              );
+              if (items.length) reader.current?.send({ type: 'terms', items: items.slice(0, 120) });
+            });
+          }
           setPercent(e.percent);
           setPage(e.page);
           setScreen(e.view ?? null);
@@ -208,6 +224,9 @@ export default function ReaderScreen() {
           break;
         case 'flags':
           setFlagsFor(e.blockId);
+          break;
+        case 'import-ref':
+          router.push({ pathname: '/', params: { import: e.doi ?? e.url ?? e.title ?? '' } });
           break;
         case 'link': {
           const url = safeExternalUrl(e.url);
@@ -325,6 +344,14 @@ export default function ReaderScreen() {
             }}
             onHighlight={() => void addAnnotation(selection, '', color)}
             onNote={() => setNoteFor({ mode: 'new', sel: selection })}
+            copied={copied}
+            onCopyCite={() => {
+              const page = index.byId.get(selection.blockId)?.source[0].page ?? 1;
+              void copyText(formatQuote(selection.text, { source: citationSourceOf(doc), page, style: citationStyle })).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1800);
+              });
+            }}
             onClose={() => {
               setSelection(null);
               reader.current?.send({ type: 'clear-selection' });

@@ -121,6 +121,12 @@ export const tr = {
   'rt.table_text': 'Tablo metni',
   'rt.check': 'Kavrama kontrolü',
   'rt.check_hint': 'Bu bölümü anladığını kısa sorularla dene.',
+  'rt.back': 'Geri',
+  'rt.go_to': 'Oraya git',
+  'rt.open_doi': "DOI'yi aç",
+  'rt.add_to_library': 'Kütüphaneye ekle',
+  'rt.defined_on': 'Sayfa {n}’de tanımlanıyor',
+  'rt.go_to_definition': 'Tanıma git',
   'rt.check_start': 'Başla',
 
   // typography
@@ -221,6 +227,10 @@ export const tr = {
   'settings.appearance': 'Görünüm',
   'settings.language': 'Dil',
   'settings.language.auto': 'Otomatik',
+  'sel.copyCite': 'Atıfla kopyala',
+  'sel.copied': 'Atfıyla birlikte kopyalandı',
+  'settings.citationStyle': 'Alıntı stili',
+  'settings.citationStyle.hint': '“Atıfla kopyala” alıntıyı, metin içi atfı ve kaynakçayı bu stilde yazar.',
   'settings.theme': 'Uygulama teması',
   'settings.theme.system': 'Sistem',
   'settings.theme.light': 'Açık',
