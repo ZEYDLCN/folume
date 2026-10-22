@@ -21,6 +21,8 @@ export interface LibraryEntry {
   doi: string | null;
   arxivId?: string | null;
   language: string | null;
+  /** the text was recognised from page pictures (OCR), not read from the PDF */
+  ocr?: boolean;
   tags: string[];
   /** when `tags` last changed; lets synced devices keep the newest tag list */
   tagsUpdatedAt?: number;
@@ -112,6 +114,7 @@ export class LibraryRepo {
         doi: doc.metadata.doi,
         arxivId: doc.metadata.arxiv_id,
         language: doc.metadata.language,
+        ocr: doc.quality.ocr === true,
         tags: previous?.tags ?? (await this.kv.get<TagsRecord>(tagsKey(doc.id)))?.tags ?? [],
         tagsUpdatedAt: previous?.tagsUpdatedAt ?? (await this.kv.get<TagsRecord>(tagsKey(doc.id)))?.updatedAt,
         hasOriginalPdf,

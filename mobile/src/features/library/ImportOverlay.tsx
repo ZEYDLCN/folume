@@ -9,7 +9,7 @@ import type { StringKey } from '@/i18n';
 const KNOWN_ERRORS = new Set([
   'not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized', 'network',
   'conversion_failed', 'cancelled', 'unknown', 'invalid_url', 'url_not_allowed', 'fetch_failed', 'timeout',
-  'url_import_disabled', 'page_too_large', 'too_complex',
+  'url_import_disabled', 'page_too_large', 'too_complex', 'ocr_too_many_pages', 'ocr_failed',
 ]);
 
 export function ImportOverlay({
@@ -70,7 +70,7 @@ export function ImportOverlay({
 
 function stageKey(stage: string): StringKey {
   const key = `import.stage.${stage}` as StringKey;
-  return ['import.stage.extract', 'import.stage.layout', 'import.stage.structure', 'import.stage.render'].includes(key)
+  return ['import.stage.extract', 'import.stage.layout', 'import.stage.structure', 'import.stage.render', 'import.stage.ocr'].includes(key)
     ? key
     : 'import.phase.converting';
 }

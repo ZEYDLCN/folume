@@ -23,6 +23,14 @@ describe('LibraryRepo', () => {
     expect((await repo.loadDocument(ieeeMl.id))?.id).toBe(ieeeMl.id);
   });
 
+  it('remembers which papers were read by OCR, so the library can say so', async () => {
+    const { repo } = setup();
+    const scanned = clone(ieeeMl);
+    scanned.quality.ocr = true;
+    expect((await repo.addDocument(scanned, 1, true)).ocr).toBe(true);
+    expect((await repo.addDocument(mlCompanion, 1, true)).ocr).toBe(false);
+  });
+
   it('keeps reading progress when the same paper is imported again', async () => {
     const { repo } = setup();
     await repo.addDocument(ieeeMl, 1, true);

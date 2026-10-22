@@ -170,7 +170,7 @@ export const tr = {
   'report.complete.complete': 'PDF’in metin katmanındaki {n} harf ve rakamın tamamı bu belgede: hiçbiri eksik, hiçbiri eklenmiş değil.',
   'report.complete.recovered': 'Tüm {n} harf ve rakam bu belgede. {r} tanesinin yeri çözülemediği için “Kurtarılan metin” olarak, sayfanın sonunda, işaretli gösteriliyor.',
   'report.complete.incomplete': 'Dikkat: {missing} harf/rakam eksik, {extra} tanesi PDF’te yok. Bu makale için Orijinal görünümü esas alın.',
-  'report.complete.unavailable': 'PDF’in metin katmanı yok (taranmış). Karşılaştıracak bir metin olmadığı için “eksiksiz” denemez; OCR desteklenmiyor.',
+  'report.complete.unavailable': 'PDF’in metin katmanı yok (taranmış) ve OCR ile okunmadı. Karşılaştıracak bir metin olmadığı için “eksiksiz” denemez.',
   'report.complete.parts': 'Okuma metni {text} · denklem {eq} · tablo {tab} · şekil içi yazı {fig} · üst/alt bilgi ve sayfa numarası {om} (hepsi tam metniyle listelenir)',
   'report.complete.how': 'Nasıl denetlenir: PDF’in metin katmanındaki her harf ve rakam, çıktıyla Unicode NFKC biçiminde ve büyük/küçük harf korunarak karşılaştırılır. Boşluk, satır sonu, tire ve noktalama yerleşimdir, içerik sayılmaz. Bağımsız bir PDF okuyucusuyla da çapraz kontrol edilir.',
   'report.ledger': 'Metin defteri',
@@ -210,7 +210,7 @@ export const tr = {
   'flag.heading_uncertain': 'Başlık düzeyi yalnızca görünüşe bakılarak tahmin edildi.',
   'flag.caption_unlinked': 'Altyazı bir şekil ya da tabloyla eşleştirilemedi.',
   'flag.reference_unparsed': 'Kaynakça girdisi alanlarına ayrıştırılamadı.',
-  'flag.no_text_layer': 'Belgede metin katmanı yok (taranmış PDF). OCR desteklenmiyor.',
+  'flag.no_text_layer': 'Belgede metin katmanı yok (taranmış PDF). Yalnızca sunucuda OCR açıksa okunabilir.',
   'flag.text_recovered': 'Düzeni çözülemeyen metin burada, kaybolmasın diye gösteriliyor; sıra yanlış olabilir.',
   'flag.low_text_coverage': 'Metnin bir kısmı okuma akışına yerleştirilemedi.',
   'flag.rotated_text_skipped': 'Dönük metin okuma akışı dışında bırakıldı.',
@@ -650,6 +650,15 @@ export const tr = {
   'export.pdf.detail': '{pages} sayfa · {highlights} vurgu · {notes} not · {strokes} çizgi',
   'export.pdf.skipped': '{n} işaret, ilgili bölüm artık makalede olmadığı için eklenmedi.',
   'export.pdf.noPages': 'Bu makalenin sayfa görselleri bu cihazda yok; PDF oluşturulamadı.',
+
+  'flag.ocr_text': 'Bu metin, sayfa görüntülerinden OCR ile tanındı; PDF’in kendi metni değil. Harf ve sayılarda hata olabilir (özellikle Türkçe karakterlerde). Önemli yerleri Orijinal görünümle karşılaştır.',
+  'import.stage.ocr': 'Sayfalar OCR ile okunuyor',
+  'import.error.ocr_too_many_pages': 'Bu taranmış belge, sunucunun OCR ile okuyabileceğinden daha fazla sayfa içeriyor.',
+  'import.error.ocr_failed': 'Taranmış belge OCR ile okunamadı.',
+  'report.complete.ocr': 'Metin, {n} harf ve rakamla OCR ile tanındı. PDF’in kendi metni olmadığı için “eksiksiz ve doğru” denemez: hatalı okunmuş harfler olabilir.',
+  'report.complete.ocr.how': 'Nasıl kontrol edilir: OCR motorunun okuduğu her harf ve rakam belgede var mı diye bakılır. Motorun yanlış okuduğu bir şeyi bu kontrol yakalayamaz; Orijinal görünümle karşılaştır.',
+
+  'library.ocr': 'OCR',
 } as const;
 
 export type StringKey = keyof typeof tr;

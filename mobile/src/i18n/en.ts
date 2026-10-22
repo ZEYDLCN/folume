@@ -163,7 +163,7 @@ export const en: Record<StringKey, string> = {
   'report.complete.complete': 'All {n} letters and digits of the PDF text layer are in this document: none missing, none added.',
   'report.complete.recovered': 'All {n} letters and digits are in this document. {r} of them could not be placed, so they are shown, marked, as “Recovered text” at the end of their page.',
   'report.complete.incomplete': 'Warning: {missing} letters/digits are missing and {extra} are not in the PDF. Rely on the Original view for this paper.',
-  'report.complete.unavailable': 'The PDF has no text layer (scanned). With no text to compare against it cannot be called complete; OCR is not supported.',
+  'report.complete.unavailable': 'The PDF has no text layer (scanned) and was not read by OCR. With no text to compare against it cannot be called complete.',
   'report.complete.parts': 'Reading text {text} · equations {eq} · tables {tab} · text in figures {fig} · headers, footers and page numbers {om} (all listed in full)',
   'report.complete.how': 'How it is checked: every letter and digit of the PDF text layer is compared with the output in Unicode NFKC, case kept. Spaces, line breaks, hyphens and punctuation are layout, not content. It is cross-checked against an independent PDF reader as well.',
   'report.ledger': 'Text ledger',
@@ -202,7 +202,7 @@ export const en: Record<StringKey, string> = {
   'flag.heading_uncertain': 'The heading level was guessed from typography only.',
   'flag.caption_unlinked': 'The caption could not be matched to a figure or table.',
   'flag.reference_unparsed': 'The bibliography entry could not be split into fields.',
-  'flag.no_text_layer': 'The document has no text layer (scanned PDF). OCR is not supported.',
+  'flag.no_text_layer': 'The document has no text layer (scanned PDF). It can only be read if the server has OCR switched on.',
   'flag.text_recovered': 'Text whose layout could not be worked out is shown here so none of it is lost; its order may be wrong.',
   'flag.low_text_coverage': 'Some of the text could not be placed in the reading flow.',
   'flag.rotated_text_skipped': 'Rotated text was left out of the reading flow.',
@@ -641,4 +641,13 @@ export const en: Record<StringKey, string> = {
   'export.pdf.detail': '{pages} pages · {highlights} highlights · {notes} notes · {strokes} strokes',
   'export.pdf.skipped': '{n} marks were left out because their place is no longer in the paper.',
   'export.pdf.noPages': 'The page pictures of this paper are not on this device, so no PDF could be made.',
+
+  'flag.ocr_text': 'This text was recognised from page pictures by OCR; it is not the PDF’s own text. Letters and digits may be wrong (accented letters especially). Check important passages in the Original view.',
+  'import.stage.ocr': 'Reading the pages with OCR',
+  'import.error.ocr_too_many_pages': 'This scanned document has more pages than the server will read with OCR.',
+  'import.error.ocr_failed': 'The scanned document could not be read by OCR.',
+  'report.complete.ocr': 'The text was recognised by OCR: {n} letters and digits. It is not the PDF’s own text, so it cannot be called exact: some letters may be misread.',
+  'report.complete.ocr.how': 'How it is checked: every letter and digit the OCR engine read is looked for in the document. A letter the engine misread cannot be caught this way; compare with the Original view.',
+
+  'library.ocr': 'OCR',
 };

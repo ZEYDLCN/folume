@@ -51,6 +51,27 @@ describe('completenessVerdict', () => {
     expect(completenessVerdict(doc)).toMatchObject({ kind: 'incomplete', missing: 12, extra: 0 });
   });
 
+  it('never calls text recognised by OCR exact, even when nothing the engine read was lost', () => {
+    const doc = clone(ieeeMl);
+    doc.quality.ocr = true;
+    doc.quality.completeness!.source = 'ocr';
+    expect(completenessVerdict(doc)).toEqual({ kind: 'ocr', letters: doc.quality.completeness!.letters_in_pdf });
+    // either marker is enough
+    const flagged = clone(ieeeMl);
+    flagged.quality.ocr = true;
+    expect(completenessVerdict(flagged).kind).toBe('ocr');
+    const sourced = clone(ieeeMl);
+    sourced.quality.completeness!.source = 'ocr';
+    expect(completenessVerdict(sourced).kind).toBe('ocr');
+  });
+
+  it('keeps saying unavailable for a scan nothing could be read from', () => {
+    const doc = clone(ieeeMl);
+    doc.quality.ocr = false;
+    doc.quality.completeness = null;
+    expect(completenessVerdict(doc).kind).toBe('unavailable');
+  });
+
   it('says unavailable when there is no text layer to compare with', () => {
     const doc = clone(ieeeMl);
     doc.quality.completeness = null;

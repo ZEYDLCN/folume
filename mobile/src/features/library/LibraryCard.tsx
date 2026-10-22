@@ -54,6 +54,7 @@ export function LibraryCard({
                 {t('common.pages', { n: entry.pageCount })}
                 {entry.year ? ` · ${entry.year}` : ''}
               </AppText>
+              {entry.ocr ? <Badge label={t('library.ocr')} tone="warn" /> : null}
               {quality ? <Badge label={t(quality)} tone={entry.grade === 'fair' ? 'warn' : 'danger'} /> : null}
             </View>
           </View>
