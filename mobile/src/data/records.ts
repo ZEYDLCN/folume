@@ -2,7 +2,7 @@ import type { Card } from '@/core/learning/srs';
 import { parseRecordKey, validRecordData, type RecordKind, type SyncRecord } from '@/core/sync/records';
 
 import { annKey, type Annotation } from './annotations';
-import { fixKey, inkKey, PROJECTS_KEY, WANT_KEY, type BlockFix, type InkPage, type Project, type WantItem } from './userdata';
+import { fixKey, inkKey, PROJECTS_KEY, SUBS_KEY, WANT_KEY, type BlockFix, type InkPage, type Project, type Subscription, type WantItem } from './userdata';
 import { cardsKey } from './cards';
 import { KEY, type KeyValueStore } from './kv';
 import type { DocState, LibraryEntry, TagsRecord } from './library';
@@ -62,6 +62,7 @@ export class RecordStore {
       }
       for (const p of (await this.kv.get<Project[]>(PROJECTS_KEY)) ?? []) out.push(live(`proj/${p.id}`, p.updatedAt, p));
       for (const w of (await this.kv.get<WantItem[]>(WANT_KEY)) ?? []) out.push(live(`want/${w.id}`, w.updatedAt, w));
+      for (const x of (await this.kv.get<Subscription[]>(SUBS_KEY)) ?? []) out.push(live(`sub/${x.id}`, x.updatedAt, x));
       const newest = new Map(out.map((r) => [r.key, r.updatedAt]));
       for (const [key, at] of Object.entries(await readTombstones(this.kv))) {
         if ((newest.get(key) ?? -1) < at) out.push({ key, updatedAt: at, deleted: true, data: null });
@@ -125,8 +126,8 @@ export class RecordStore {
   }
 
   private async readLocal(kind: RecordKind, docId: string | null, id: string | null): Promise<Local | null> {
-    if (kind === 'proj' || kind === 'want') {
-      const list = (await this.kv.get<(Project | WantItem)[]>(kind === 'proj' ? PROJECTS_KEY : WANT_KEY)) ?? [];
+    if (kind === 'proj' || kind === 'want' || kind === 'sub') {
+      const list = (await this.kv.get<(Project | WantItem | Subscription)[]>(kind === 'proj' ? PROJECTS_KEY : kind === 'want' ? WANT_KEY : SUBS_KEY)) ?? [];
       const item = list.find((x) => x.id === id);
       return item ? { updatedAt: item.updatedAt, data: item } : null;
     }
@@ -169,6 +170,7 @@ export class RecordStore {
     };
     if (kind === 'proj') return upsert(PROJECTS_KEY, data as Project | null);
     if (kind === 'want') return upsert(WANT_KEY, data as WantItem | null);
+    if (kind === 'sub') return upsert(SUBS_KEY, data as Subscription | null);
     if (docId === null) return;
     switch (kind) {
       case 'fix':

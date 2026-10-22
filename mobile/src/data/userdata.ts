@@ -106,6 +106,23 @@ export function sameWanted(a: Pick<WantItem, 'doi' | 'arxivId' | 'url' | 'title'
   return key(a.title) === key(b.title) && key(a.title).length > 8;
 }
 
+// -------------------------------------------------------------------------------------------- followed topics
+
+/** A topic the reader follows on arXiv: a category, keywords, or both. */
+export interface Subscription {
+  id: string;
+  name: string;
+  category: string | null;
+  query: string | null;
+  /** publication time (ms) of the newest paper the reader has looked at; newer ones are "new" */
+  seenUpTo: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export const SUBS_KEY = 'folume:v1:subs';
+export const subRecordKey = (id: string) => `sub/${id}`;
+
 // -------------------------------------------------------------------------------------------------- repositories
 
 abstract class ListRepo<T extends { id: string; updatedAt: number }> {
@@ -246,5 +263,39 @@ export class WantRepo extends ListRepo<WantItem> {
   }
   remove(id: string): Promise<void> {
     return this.serial(() => this.removeItem(WANT_KEY, id, wantRecordKey(id)));
+  }
+}
+
+export class SubRepo extends ListRepo<Subscription> {
+  constructor(kv: KeyValueStore, now: () => number = Date.now, mutex: Mutex = sharedMutex, private readonly newId: () => string = () => `s${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`) {
+    super(kv, now, mutex);
+  }
+  async list(): Promise<Subscription[]> {
+    return (await this.read(SUBS_KEY)).sort((a, b) => a.createdAt - b.createdAt);
+  }
+  /** Follows a topic; null when there is nothing to follow or it is already followed. */
+  add(topic: { category: string | null; query: string | null }): Promise<Subscription | null> {
+    return this.serial(async () => {
+      const category = topic.category?.trim() || null;
+      const query = topic.query?.replace(/\s+/g, ' ').trim() || null;
+      if (!category && !query) return null;
+      const list = await this.read(SUBS_KEY);
+      const same = (x: Subscription) => (x.category ?? '').toLowerCase() === (category ?? '').toLowerCase() && (x.query ?? '').toLowerCase() === (query ?? '').toLowerCase();
+      if (list.some(same)) return null;
+      const t = this.now();
+      const sub: Subscription = { id: this.newId(), name: category && query ? `${category} · ${query}` : (category ?? query)!, category, query, seenUpTo: 0, createdAt: t, updatedAt: t };
+      await this.writeItem(SUBS_KEY, sub);
+      return sub;
+    });
+  }
+  /** Never moves backwards, so looking at an older list again does not make new papers look new. */
+  markSeen(id: string, upTo: number): Promise<void> {
+    return this.serial(async () => {
+      const sub = (await this.read(SUBS_KEY)).find((x) => x.id === id);
+      if (sub && upTo > sub.seenUpTo) await this.writeItem(SUBS_KEY, { ...sub, seenUpTo: upTo, updatedAt: this.now() });
+    });
+  }
+  remove(id: string): Promise<void> {
+    return this.serial(() => this.removeItem(SUBS_KEY, id, subRecordKey(id)));
   }
 }

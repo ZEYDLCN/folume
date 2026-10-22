@@ -149,6 +149,13 @@ def test_keywords_are_reduced_to_words_and_cannot_break_the_phrase():
         build_url(None, "x" * 300, 10)
 
 
+def test_the_operator_can_point_the_server_at_a_mirror():
+    url = build_url("cs.LG", None, 5, base="https://mirror.example.org/api/query")
+    assert url.startswith("https://mirror.example.org/api/query?")
+    assert Settings.from_env({"FOLUME_FEED_URL": "http://127.0.0.1:9/api/query"}).feed_url == "http://127.0.0.1:9/api/query"
+    assert Settings.from_env({}).feed_url == "https://export.arxiv.org/api/query"
+
+
 def test_the_number_of_results_is_kept_within_bounds():
     assert httpx.URL(build_url("cs.LG", None, 0)).params["max_results"] == "1"
     assert httpx.URL(build_url("cs.LG", None, 10_000)).params["max_results"] == "50"

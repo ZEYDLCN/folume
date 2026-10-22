@@ -48,7 +48,7 @@ def _terms(keywords: str) -> str:
     return " ".join(w for w in words if w.strip("-_"))
 
 
-def build_url(category: str | None, keywords: str | None, limit: int) -> str:
+def build_url(category: str | None, keywords: str | None, limit: int, base: str = API) -> str:
     parts: list[str] = []
     if category:
         if not _CATEGORY.fullmatch(category):
@@ -69,7 +69,7 @@ def build_url(category: str | None, keywords: str | None, limit: int) -> str:
         "sortOrder": "descending",
         "max_results": str(max(1, min(MAX_RESULTS, int(limit)))),
     }
-    return f"{API}?{urlencode(query)}"
+    return f"{base}?{urlencode(query)}"
 
 
 # ------------------------------------------------------------------------------------------------------- parsing
@@ -131,6 +131,7 @@ class FeedService:
         self,
         fetcher: Fetcher,
         *,
+        base_url: str = API,
         ttl: float = 900.0,
         min_interval: float = 3.0,
         clock: Callable[[], float] = time.monotonic,
@@ -138,6 +139,7 @@ class FeedService:
         max_cached: int = 64,
     ):
         self.fetcher = fetcher
+        self.base_url = base_url  # the operator's choice (a mirror, or a test server), never the caller's
         self.ttl = ttl
         self.min_interval = min_interval
         self.clock = clock
@@ -148,7 +150,7 @@ class FeedService:
         self._last_request: float | None = None
 
     def get(self, category: str | None, keywords: str | None, limit: int) -> dict:
-        url = build_url(category, keywords, limit)  # validates before anything is looked up
+        url = build_url(category, keywords, limit, self.base_url)  # validates before anything is looked up
         key = (category or "", _terms(keywords or "").lower(), max(1, min(MAX_RESULTS, int(limit))))
         with self._lock:
             hit = self._cache.get(key)

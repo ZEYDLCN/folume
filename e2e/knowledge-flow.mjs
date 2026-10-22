@@ -9,6 +9,7 @@ import { serve } from './serve.mjs';
 
 const API = 8767;
 const LLM = 8798;
+const ARXIV = 8799;
 const WEB = 8083;
 const tmp = mkdtempSync(path.join(tmpdir(), 'folume-e2e-'));
 const python = path.join(here, '../backend/.venv/bin/python');
@@ -18,6 +19,7 @@ const SYNC_KEY = 'correct horse battery staple';
 const NAMESPACE = createHash('sha256').update(`folume-sync-v1:${SYNC_KEY}`).digest('hex');
 
 const llm = spawn(python, [path.join(here, 'fake_llm_server.py'), String(LLM)], { stdio: 'ignore' });
+const arxiv = spawn(python, [path.join(here, 'fake_arxiv_server.py'), String(ARXIV)], { stdio: 'ignore' });
 const api = spawn(python, ['-m', 'uvicorn', 'folume.main:app', '--port', String(API)], {
   cwd: path.join(here, '../backend'),
   env: {
@@ -26,6 +28,8 @@ const api = spawn(python, ['-m', 'uvicorn', 'folume.main:app', '--port', String(
     FOLUME_CORS_ORIGINS: `http://localhost:${WEB}`,
     FOLUME_LLM_BASE_URL: `http://127.0.0.1:${LLM}`,
     FOLUME_LLM_MODEL: 'fake-model',
+    FOLUME_FEED_URL: `http://127.0.0.1:${ARXIV}/api/query`,
+    FOLUME_ALLOW_PRIVATE_URLS: '1',
     FOLUME_SYNC_ENABLED: '1',
     FOLUME_SYNC_DB: path.join(tmp, 'sync.sqlite3'),
   },
@@ -43,6 +47,7 @@ const up = async (url) => {
 };
 await up(`http://localhost:${API}/v1/health`);
 await up(`http://127.0.0.1:${LLM}/__requests`);
+await up(`http://127.0.0.1:${ARXIV}/__requests`);
 
 const browser = await launch();
 const errors = [];
@@ -185,6 +190,52 @@ await check('the reading list takes a Zotero-style bibliography file, a DOI by h
   await p.getByText(/Already read \(1\)/).waitFor();
   await p.getByTestId('screen-back').click();
   await p.getByTestId('want-badge').waitFor();
+});
+
+await check('following a topic on arXiv lists its newest papers, marks the ones not seen before, and hands them to the reading list or the library', async () => {
+  const p = A.page;
+  const asked = async () => (await (await fetch(`http://127.0.0.1:${ARXIV}/__requests`)).json());
+  await p.getByTestId('open-feed').click();
+  await p.getByTestId('feed-none').waitFor();
+  await p.getByTestId('feed-suggest-cs.LG').click();
+  assert((await p.getByTestId('feed-category').inputValue()) === 'cs.LG', 'a suggestion fills the category');
+  await p.getByTestId('feed-follow').click();
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await p.locator('[data-testid^=feed-paper-]').count()) === 3, 'three papers');
+  assert(/3 new papers/.test(await p.getByTestId('feed-new-count').textContent()), 'all three are new the first time');
+  assert((await asked()).at(-1) === 'cat:cs.LG', `the server asked arXiv for ${(await asked()).at(-1)}`);
+  // BERT is already on the reading list (from the bibliography file); the others are not
+  const bert = p.getByTestId('feed-paper-1810_04805');
+  assert(/On your reading list/.test(await bert.textContent()), 'known to the reading list');
+  assert((await p.getByTestId('feed-want-1810_04805').count()) === 0, 'no second copy offered');
+  await A.shot('02e-feed');
+  await p.getByTestId('feed-want-2401_01234').click();
+  await p.getByTestId('feed-notice').waitFor();
+  assert(/Added to your reading list/.test(await p.getByTestId('feed-notice').textContent()), 'added');
+  assert(/On your reading list/.test(await p.getByTestId('feed-paper-2401_01234').textContent()), 'now on the list');
+  // a second topic, by keywords
+  await p.getByTestId('feed-keywords').fill('sparse routing');
+  await p.getByTestId('feed-follow').click();
+  await p.waitForFunction(() => document.querySelectorAll('[data-testid^=feed-sub-]').length === 2);
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await asked()).at(-1) === 'all:"sparse routing"', `keywords query: ${(await asked()).at(-1)}`);
+  // what was shown counts as seen: nothing is "new" the next time
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-feed').click();
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await p.getByTestId('feed-new-count').count()) === 0, 'nothing new the second time');
+  assert((await p.getByText('New', { exact: true }).count()) === 0, 'no New badges');
+  // hand a paper to the library: the link dialog opens with its arXiv id
+  await p.getByTestId('feed-import-hep_th_9901001').click();
+  await p.getByTestId('link-sheet').waitFor();
+  assert((await p.getByTestId('link-input').inputValue()) === 'hep-th/9901001', await p.getByTestId('link-input').inputValue());
+  await p.getByTestId('sheet-close').click();
+  // stop following
+  await p.getByTestId('open-feed').click();
+  await p.locator('[data-testid^=feed-unfollow-]').first().click();
+  await p.locator('[data-testid^=feed-unfollow-]').first().click();
+  await p.getByTestId('feed-none').waitFor();
+  await p.getByTestId('screen-back').click();
 });
 
 await check('search finds text across papers and opens the paper at that block', async () => {
@@ -566,4 +617,5 @@ await browser.close();
 web.close();
 api.kill();
 llm.kill();
+arxiv.kill();
 done();

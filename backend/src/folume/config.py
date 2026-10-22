@@ -35,6 +35,7 @@ class Settings:
     url_timeout_seconds: float = 60.0
     # following new papers on arXiv: the server asks arXiv's public API on the reader's behalf
     feed: bool = True
+    feed_url: str = "https://export.arxiv.org/api/query"  # where the listings come from (a mirror, or a test server)
     # optional OCR for scanned PDFs (needs the `ocr` extra); it is slow, so a scan longer than this is refused
     ocr: bool = False
     ocr_max_pages: int = 60
@@ -69,6 +70,7 @@ class Settings:
             allow_private_urls=_bool(e.get("FOLUME_ALLOW_PRIVATE_URLS")),
             url_timeout_seconds=float(e.get("FOLUME_URL_TIMEOUT_SECONDS", defaults.url_timeout_seconds)),
             feed=_bool(e.get("FOLUME_FEED"), defaults.feed),
+            feed_url=e.get("FOLUME_FEED_URL") or defaults.feed_url,
             ocr=_bool(e.get("FOLUME_OCR"), defaults.ocr),
             ocr_max_pages=int(e.get("FOLUME_OCR_MAX_PAGES", defaults.ocr_max_pages)),
             llm_base_url=e.get("FOLUME_LLM_BASE_URL") or None,

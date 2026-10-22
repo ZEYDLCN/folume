@@ -165,6 +165,7 @@ export default function LibraryScreen() {
             {(
               [
                 ['open-ask', 'chatbubbles-outline', t('library.ask'), '/ask'],
+                ['open-feed', 'newspaper-outline', t('library.feed'), '/feed'],
                 ['open-projects', 'grid-outline', t('library.projects'), '/projects'],
                 ['open-notes', 'create-outline', t('notes.title'), '/notes'],
               ] as const

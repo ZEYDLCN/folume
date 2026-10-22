@@ -6,11 +6,11 @@ export interface SyncRecord {
   data: unknown | null;
 }
 
-/** `fix` and `ink` belong to a paper; `proj` (projects) and `want` (the reading list) belong to the reader. */
-export type RecordKind = 'ann' | 'state' | 'quiz' | 'card' | 'tags' | 'fix' | 'ink' | 'proj' | 'want';
+/** `fix` and `ink` belong to a paper; `proj` (projects), `want` (the reading list) and `sub` (followed topics) belong to the reader. */
+export type RecordKind = 'ann' | 'state' | 'quiz' | 'card' | 'tags' | 'fix' | 'ink' | 'proj' | 'want' | 'sub';
 
 export function parseRecordKey(key: string): { kind: RecordKind; docId: string | null; id: string | null } | null {
-  const global = /^(proj|want)\/([A-Za-z0-9_.:-]{1,80})$/.exec(key);
+  const global = /^(proj|want|sub)\/([A-Za-z0-9_.:-]{1,80})$/.exec(key);
   if (global) return { kind: global[1] as RecordKind, docId: null, id: global[2] };
   const m = /^(ann|state|quiz|card|tags|fix|ink)\/([A-Za-z0-9_.:-]{1,80})(?:\/([A-Za-z0-9_.:-]{1,80}))?$/.exec(key);
   if (!m) return null;
@@ -46,6 +46,8 @@ export function validRecordData(kind: RecordKind, data: unknown): boolean {
       return str(data.id) && str(data.name) && num(data.updatedAt) && Array.isArray(data.paperIds) && data.paperIds.every(str) && Array.isArray(data.columns) && isObj(data.cells);
     case 'want':
       return str(data.id) && str(data.title) && num(data.updatedAt) && (data.state === 'todo' || data.state === 'done');
+    case 'sub':
+      return str(data.id) && str(data.name) && num(data.updatedAt) && num(data.seenUpTo) && (data.category === null || str(data.category)) && (data.query === null || str(data.query)) && (data.category !== null || data.query !== null);
   }
 }
 

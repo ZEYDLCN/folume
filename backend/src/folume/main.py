@@ -37,7 +37,8 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
     app.state.jobs = jobs
     app.state.ai = AiService(settings, llm_provider or build_provider(settings))
     app.state.sync = SyncStore(settings.sync_db) if settings.sync_enabled else None
-    app.state.feed = feed or FeedService(Fetcher(allow_private=settings.allow_private_urls, timeout=settings.url_timeout_seconds))
+    app.state.feed = feed or FeedService(
+        Fetcher(allow_private=settings.allow_private_urls, timeout=settings.url_timeout_seconds), base_url=settings.feed_url)
 
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],

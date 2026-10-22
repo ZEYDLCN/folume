@@ -6,7 +6,7 @@ import { MemoryKV } from './kv';
 import { LibraryRepo } from './library';
 import { Mutex } from './mutex';
 import { RecordStore } from './records';
-import { FixRepo, InkRepo, ProjectRepo, sameWanted, WantRepo, cellKey } from './userdata';
+import { FixRepo, InkRepo, ProjectRepo, sameWanted, SubRepo, WantRepo, cellKey } from './userdata';
 
 function device(start: number) {
   let t = start;
@@ -21,6 +21,7 @@ function device(start: number) {
     ink: new InkRepo(kv, now, mutex),
     projects: new ProjectRepo(kv, now, mutex, () => `p${start}x${++n}`),
     want: new WantRepo(kv, now, mutex, () => `w${start}x${++n}`),
+    subs: new SubRepo(kv, now, mutex, () => `s${start}x${++n}`),
     records: new RecordStore(kv, mutex),
     library: new LibraryRepo(kv, new MemoryBlobStore(), now, mutex),
   };
@@ -32,6 +33,7 @@ describe('record keys of the new kinds', () => {
     expect(parseRecordKey('ink/abc123/3')).toEqual({ kind: 'ink', docId: 'abc123', id: '3' });
     expect(parseRecordKey('proj/p1')).toEqual({ kind: 'proj', docId: null, id: 'p1' });
     expect(parseRecordKey('want/w1')).toEqual({ kind: 'want', docId: null, id: 'w1' });
+    expect(parseRecordKey('sub/s1')).toEqual({ kind: 'sub', docId: null, id: 's1' });
     expect(parseRecordKey('fix/abc123')).toBeNull();
     expect(parseRecordKey('proj/p1/extra')).toBeNull();
     expect(parseRecordKey('proj/../x')).toBeNull();
@@ -114,6 +116,50 @@ describe('WantRepo', () => {
   });
 });
 
+describe('SubRepo', () => {
+  it('follows a category, keywords or both, and not the same thing twice', async () => {
+    const d = device(1000);
+    const a = await d.subs.add({ category: ' cs.LG ', query: '' });
+    expect(a).toMatchObject({ category: 'cs.LG', query: null, name: 'cs.LG', seenUpTo: 0 });
+    expect(await d.subs.add({ category: 'cs.LG', query: null })).toBeNull();
+    const b = await d.subs.add({ category: null, query: '  Sparse   Routing ' });
+    expect(b).toMatchObject({ category: null, query: 'Sparse Routing', name: 'Sparse Routing' });
+    expect(await d.subs.add({ category: 'cs.LG', query: 'sparse routing' })).toMatchObject({ name: 'cs.LG · sparse routing' });
+    expect(await d.subs.add({ category: 'cs.LG', query: 'SPARSE routing' })).toBeNull();
+    expect(await d.subs.add({ category: '', query: '   ' })).toBeNull();
+    expect((await d.subs.list()).map((x) => x.name)).toEqual(['cs.LG', 'Sparse Routing', 'cs.LG · sparse routing']);
+  });
+
+  it('remembers how far the reader has seen, and never goes back', async () => {
+    const d = device(1000);
+    const s = (await d.subs.add({ category: 'cs.CL', query: null }))!;
+    await d.subs.markSeen(s.id, Date.parse('2024-01-05T00:00:00Z'));
+    await d.subs.markSeen(s.id, Date.parse('2024-01-03T00:00:00Z'));
+    expect((await d.subs.list())[0].seenUpTo).toBe(Date.parse('2024-01-05T00:00:00Z'));
+    await d.subs.markSeen('missing', 5);
+  });
+
+  it('can be removed, and the removal travels', async () => {
+    const a = device(1000);
+    const s = (await a.subs.add({ category: 'cs.CV', query: null }))!;
+    const b = device(5000);
+    await b.records.apply(await a.records.collect());
+    expect((await b.subs.list())[0]).toEqual(s);
+    await a.subs.remove(s.id);
+    await b.records.apply(await a.records.collect());
+    expect(await b.subs.list()).toEqual([]);
+  });
+
+  it('checks the shape of a subscription that arrives from elsewhere', () => {
+    const ok = { id: 's1', name: 'cs.LG', category: 'cs.LG', query: null, seenUpTo: 0, createdAt: 1, updatedAt: 2 };
+    expect(validRecordData('sub', ok)).toBe(true);
+    expect(validRecordData('sub', { ...ok, category: 5 })).toBe(false);
+    expect(validRecordData('sub', { ...ok, name: undefined })).toBe(false);
+    expect(validRecordData('sub', { ...ok, seenUpTo: 'x' })).toBe(false);
+    expect(validRecordData('sub', { ...ok, category: null, query: null })).toBe(false);
+  });
+});
+
 describe('synced like everything else the reader owns', () => {
   async function filled() {
     const a = device(1000);
@@ -122,21 +168,23 @@ describe('synced like everything else the reader owns', () => {
     const p = await a.projects.create('Review');
     await a.projects.edit(p.id, (x) => ({ ...x, paperIds: ['doc1'], cells: { [cellKey('doc1', 'c1')]: 'note' } }));
     await a.want.add([{ title: 'a paper to read later', doi: '10.1/z' }]);
+    await a.subs.add({ category: 'cs.LG', query: null });
     return a;
   }
 
-  it('collects and applies all four kinds on another device', async () => {
+  it('collects and applies all five kinds on another device', async () => {
     const a = await filled();
     const b = device(5000);
     const records = await a.records.collect();
-    expect(records.map((r) => r.key.split('/')[0]).sort()).toEqual(['fix', 'ink', 'proj', 'want']);
-    expect(await b.records.apply(records)).toMatchObject({ applied: 4, invalid: 0 });
+    expect(records.map((r) => r.key.split('/')[0]).sort()).toEqual(['fix', 'ink', 'proj', 'sub', 'want']);
+    expect(await b.records.apply(records)).toMatchObject({ applied: 5, invalid: 0 });
     expect(await b.fixes.list('doc1')).toEqual(await a.fixes.list('doc1'));
     expect(await b.ink.list('doc1')).toEqual(await a.ink.list('doc1'));
     expect(await b.projects.list()).toEqual(await a.projects.list());
     expect(await b.want.list()).toEqual(await a.want.list());
+    expect(await b.subs.list()).toEqual(await a.subs.list());
     // applying the same records again changes nothing
-    expect(await b.records.apply(records)).toMatchObject({ applied: 0, skipped: 4 });
+    expect(await b.records.apply(records)).toMatchObject({ applied: 0, skipped: 5 });
   });
 
   it('the device that edited a project last keeps its version, and a deletion travels', async () => {
@@ -158,9 +206,9 @@ describe('synced like everything else the reader owns', () => {
   it('is part of a backup, and papers are listed only for what belongs to a paper', async () => {
     const a = await filled();
     const text = await createBackup(a.records, a.library);
-    expect(JSON.parse(text).records).toHaveLength(4);
+    expect(JSON.parse(text).records).toHaveLength(5);
     const b = device(9000);
-    expect(await restoreBackup(b.records, text)).toMatchObject({ ok: true, applied: 4 });
+    expect(await restoreBackup(b.records, text)).toMatchObject({ ok: true, applied: 5 });
     expect((await b.projects.list())[0].name).toBe('Review');
   });
 });
