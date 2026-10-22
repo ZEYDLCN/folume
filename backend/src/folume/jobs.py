@@ -42,7 +42,7 @@ def _write_result(result, directory: Path) -> None:
     (directory / "document.json").write_text(result.document.model_dump_json(), encoding="utf-8")
 
 
-def _convert_in_child(conn, data: bytes, filename: str, max_pages: int, directory: str, max_memory_mb: int) -> None:
+def _convert_in_child(conn, data: bytes, filename: str, options: ParseOptions, directory: str, max_memory_mb: int) -> None:
     """Entry point of a conversion process: reports progress and the outcome over `conn`, writes results to disk."""
     try:
         if max_memory_mb > 0:
@@ -53,7 +53,7 @@ def _convert_in_child(conn, data: bytes, filename: str, max_pages: int, director
                 resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
             except (ImportError, ValueError, OSError):
                 pass
-        result = parse_pdf(data, filename, ParseOptions(max_pages=max_pages), lambda stage, f: conn.send(("progress", stage, f)))
+        result = parse_pdf(data, filename, options, lambda stage, f: conn.send(("progress", stage, f)))
         _write_result(result, Path(directory))
         conn.send(("done",))
     except ParseError as exc:
@@ -168,6 +168,10 @@ class JobManager:
 
         return report
 
+    def _options(self) -> ParseOptions:
+        s = self.settings
+        return ParseOptions(max_pages=s.max_pages, ocr=s.ocr, ocr_max_pages=s.ocr_max_pages)
+
     def _run_url(self, job: Job, candidates: list[str]) -> None:
         job.status = "processing"
         job.stage, job.fraction = "download", 0.01
@@ -197,8 +201,7 @@ class JobManager:
             if self.settings.isolate_jobs:
                 outcome = self._convert_isolated(job, data, directory)
             else:
-                result = parse_pdf(data, job.filename, ParseOptions(max_pages=self.settings.max_pages),
-                                   self._progress(job))
+                result = parse_pdf(data, job.filename, self._options(), self._progress(job))
                 _write_result(result, directory)
                 outcome = ("done",)
         except ParseError as exc:
@@ -221,7 +224,7 @@ class JobManager:
         parent, child = _CTX.Pipe(duplex=False)
         proc = _CTX.Process(
             target=_convert_in_child,
-            args=(child, data, job.filename, self.settings.max_pages, str(directory), self.settings.max_memory_mb),
+            args=(child, data, job.filename, self._options(), str(directory), self.settings.max_memory_mb),
             daemon=True,
         )
         proc.start()
@@ -241,6 +244,8 @@ class JobManager:
                         break
                     if msg[0] == "progress":
                         job.stage, job.fraction = msg[1], msg[2]
+                        if msg[1] == "ocr":  # a page takes seconds: the limit is per page, so a long scan can finish
+                            deadline = max(deadline, time.monotonic() + self.settings.job_timeout_seconds)
                     else:
                         outcome = msg
                 elif not proc.is_alive() and not parent.poll():

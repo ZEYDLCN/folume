@@ -27,6 +27,9 @@ dev = [
   "ruff>=0.4",
   "pyphen>=0.14",
 ]
+# optional OCR for scanned PDFs (models are bundled in the wheel; switched on with FOLUME_OCR=1).
+# 1.2.x on every Python version: 1.3+ (Python <= 3.12 only) bundles PP-OCRv4 models that drop most spaces between words
+ocr = ["rapidocr-onnxruntime>=1.2,<1.3"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

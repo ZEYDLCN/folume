@@ -295,7 +295,7 @@
     },
     "Completeness": {
       "additionalProperties": false,
-      "description": "Letter-by-letter comparison of the PDF text layer with the converted document.\n\nCounts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).\n`complete` is true when nothing is missing and nothing was invented.",
+      "description": "Letter-by-letter comparison of the PDF text layer with the converted document.\n\nCounts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).\n`complete` is true when nothing is missing and nothing was invented.\n\n`source` says what the PDF side of the comparison is. For `text_layer` it is the text the PDF itself carries, so\n`complete` means the document has every letter of the PDF. For `ocr` there is no such text: the comparison is with\nwhat the OCR engine read from the page images, so `complete` only means nothing the engine read was lost, never that\nthe text is exact.",
       "properties": {
         "complete": {
           "title": "Complete",
@@ -356,10 +356,20 @@
           "description": "Letters the layout analysis could not place; shown in flagged blocks",
           "title": "Recovered",
           "type": "integer"
+        },
+        "source": {
+          "default": "text_layer",
+          "enum": [
+            "text_layer",
+            "ocr"
+          ],
+          "title": "Source",
+          "type": "string"
         }
       },
       "required": [
         "complete",
+        "source",
         "letters_in_pdf",
         "in_text",
         "in_equations",
@@ -461,6 +471,12 @@
         "ledger": {
           "$ref": "#/$defs/TextLedger"
         },
+        "ocr": {
+          "default": false,
+          "description": "True when the text was recognised by OCR from page images, not read from a text layer",
+          "title": "Ocr",
+          "type": "boolean"
+        },
         "omitted": {
           "items": {
             "$ref": "#/$defs/OmittedRegion"
@@ -490,7 +506,8 @@
         "omitted",
         "issues",
         "counts",
-        "completeness"
+        "completeness",
+        "ocr"
       ],
       "title": "DocumentQuality",
       "type": "object"
@@ -791,6 +808,7 @@
             "caption_unlinked",
             "reference_unparsed",
             "no_text_layer",
+            "ocr_text",
             "low_text_coverage",
             "rotated_text_skipped",
             "text_recovered"

@@ -38,6 +38,7 @@ from .equations import detect_equations
 from .furniture import detect_furniture
 from .layout import PageLayout, analyze_page, reading_order
 from .lines import build_fragments
+from .ocr import ocr_available, ocr_pages
 from .raw import extract_pages
 from .refs import CitationIndex, link_citations, parse_reference
 from .regions import Region, detect_caption_tables, detect_figures, detect_ruled_tables
@@ -67,6 +68,7 @@ log = logging.getLogger(__name__)
 
 
 MAX_PAGE_POINTS = 3000  # 41.7 in
+OCR_SCORE_CAP = 0.84  # just under the "good" grade
 
 
 class ParseError(Exception):
@@ -81,12 +83,23 @@ class ParseOptions:
     max_pages: int = 300
     page_image_scale: float = 2.0
     crop_scale: float = 3.0
+    ocr: bool = False  # read a scanned PDF (no text layer) with OCR instead of calling it unsupported
+    ocr_max_pages: int = 60  # OCR is slow: a longer scan is refused
 
 
 @dataclass
 class ParseResult:
     document: Document
     assets: dict[str, bytes] = field(default_factory=dict)
+
+
+def _has_text_layer(pages) -> bool:
+    return sum(len(p.chars) for p in pages) >= 20 * len(pages)
+
+
+def _after_ocr(report: Progress) -> Progress:
+    """Progress of the stages after OCR: reading the pages took the share of the bar up to 0.85, they fill the rest."""
+    return lambda stage, fraction: report(stage, 0.85 + 0.15 * (fraction - 0.45) / 0.55)
 
 
 def estimate_body_size(pages) -> float:
@@ -117,6 +130,10 @@ def parse_pdf(data: bytes, filename: str = "document.pdf", options: ParseOptions
         # rendering an enormous page would use gigabytes of memory; papers are A4/Letter, posters rarely exceed this
         raise ParseError("page_too_large", "A page is larger than this converter supports")
     report("extract", 0.3)
+    if opts.ocr and not _has_text_layer(pages) and ocr_available() and len(pages) > opts.ocr_max_pages:
+        # reading a page takes seconds: say so before spending any of them
+        raise ParseError("ocr_too_many_pages",
+                         f"This scanned PDF has {len(pages)} pages; OCR is limited to {opts.ocr_max_pages} pages here")
 
     sha = hashlib.sha256(data).hexdigest()
     try:
@@ -143,7 +160,6 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
                                    image_width=w, image_height=h))
     report("render", 0.45)
 
-    total_chars = sum(1 for p in pages for c in p.chars)
     doc_flags: list[QualityFlag] = []
     source = SourceInfo(filename=os.path.basename(filename) or "document.pdf", sha256=sha, size_bytes=len(data),
                         page_count=info.get("page_count") or len(pages), producer=info.get("producer"))
@@ -151,9 +167,34 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
                         created_at=datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"))
     doc_id = sha[:16]
 
-    if total_chars < 20 * len(pages):
+    ocr_used = False
+    no_text = ""  # why a PDF without a text layer stays unsupported
+    if not _has_text_layer(pages):
+        if not opts.ocr:
+            no_text = "OCR is switched off on this server; the operator can switch it on (FOLUME_OCR=1)."
+        elif not ocr_available():
+            no_text = "OCR is switched on, but its engine is not installed on this server (the `ocr` extra)."
+        else:
+            try:
+                read = ocr_pages(data, lambda done, total: report("ocr", 0.45 + 0.4 * done / total))
+            except (PdfiumError, MemoryError):
+                raise  # handled like any other unreadable or too large document
+            except Exception as exc:  # the engine failed on this document
+                log.exception("OCR failed")
+                raise ParseError("ocr_failed", f"The scanned PDF could not be read by OCR: {type(exc).__name__}") from exc
+            if _has_text_layer(read):
+                pages, ocr_used = read, True
+                doc_flags.append(QualityFlag(
+                    code="ocr_text", severity="warning",
+                    message="The text was recognised from the page images by OCR and may contain mistakes"))
+                report = _after_ocr(report)
+            else:
+                no_text = "OCR recognised no text on its pages."
+
+    if no_text:
+        total_chars = sum(len(p.chars) for p in pages)
         flag = QualityFlag(code="no_text_layer", severity="error",
-                           message="No extractable text layer (scanned PDF). OCR is not supported.")
+                           message=f"No extractable text layer (scanned PDF). {no_text}")
         quality = DocumentQuality(
             score=0.0, grade="unsupported",
             ledger=TextLedger(total_chars=total_chars, in_blocks=0, in_figures=0, in_tables=0, omitted=0,
@@ -161,7 +202,7 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
             pages=[PageQuality(page=p.number, layout="unknown", confidence=0.0, char_count=len(p.chars),
                                notes=["no text layer"]) for p in pages],
             issues=[QualityIssue(flag=flag)], counts={"blocks": 0},
-            # nothing can be called complete when the PDF has no text layer to compare with (OCR is out of scope)
+            # nothing can be called complete when the PDF has no text layer to compare with
             completeness=audit_pages(pages, [], []).model_copy(update={"complete": False}))
         doc = Document(id=doc_id, source=source, parser=parser, metadata=Metadata(title=info.get("title")),
                        pages=page_infos, sections=[], blocks=[], quality=quality, image_scale=opts.page_image_scale)
@@ -268,7 +309,7 @@ def _convert(data, filename, sha, pages, info, renderer: Renderer, opts: ParseOp
     report("render", 0.92)
 
     # --- accounting
-    quality = _quality(pages, streams, blocks, doc_flags, furniture, omitted_chars_rotated, layouts)
+    quality = _quality(pages, streams, blocks, doc_flags, furniture, omitted_chars_rotated, layouts, ocr=ocr_used)
     metadata = _metadata(blocks, sections, info, furniture, omitted_chars_rotated, keywords)
     doc = Document(id=doc_id, source=source, parser=parser, metadata=metadata, pages=page_infos,
                    sections=sections, blocks=blocks, quality=quality, image_scale=opts.page_image_scale,
@@ -667,7 +708,7 @@ def _r(b) -> tuple[float, float, float, float]:
 
 
 def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: list[QualityFlag], furniture,
-             rotated: list[tuple[int, Char]], layouts: dict[int, PageLayout]) -> DocumentQuality:
+             rotated: list[tuple[int, Char]], layouts: dict[int, PageLayout], ocr: bool = False) -> DocumentQuality:
     all_chars = [c for p in pages for c in p.chars if not c.text.isspace()]
     tally = Counter(c.status or "unaccounted" for c in all_chars)
     total = len(all_chars)
@@ -706,17 +747,21 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
         issues.append(QualityIssue(flag=QualityFlag(
             code="low_text_coverage", severity="warning",
             message=f"{unaccounted} of {total} characters could not be placed in the reading flow")))
-    completeness = audit_pages(pages, blocks, omitted)
+    completeness = audit_pages(pages, blocks, omitted, source="ocr" if ocr else "text_layer")
     if not completeness.complete:
+        what = "recognised" if ocr else "PDF"
         issues.append(QualityIssue(flag=QualityFlag(
             code="low_text_coverage", severity="warning",
-            message=f"{completeness.missing} letters or digits of the PDF text are missing from the document "
-                    f"and {completeness.extra} are not in the PDF")))
+            message=f"{completeness.missing} letters or digits of the {what} text are missing from the document "
+                    f"and {completeness.extra} are not in the {what} text")))
     page_quality: list[PageQuality] = []
     for p in pages:
         lay = layouts[p.number]
+        notes = list(lay.notes)
+        if ocr and p.ocr_confidence is not None:
+            notes.append(f"recognised by OCR, mean confidence {p.ocr_confidence:.2f}")
         page_quality.append(PageQuality(page=p.number, layout=lay.kind, confidence=round(lay.confidence, 3),
-                                        char_count=len(p.chars), notes=lay.notes))
+                                        char_count=len(p.chars), notes=notes))
         if lay.kind == "unknown" or lay.confidence < 0.5:
             issues.append(QualityIssue(page=p.number, flag=QualityFlag(
                 code="reading_order_uncertain", severity="warning",
@@ -735,13 +780,18 @@ def _quality(pages, streams: list[PageStream], blocks: list[Block], doc_flags: l
     mean_conf = sum(w * c for w, c in weights) / wsum
     page_conf = sum(pq.confidence for pq in page_quality) / max(len(page_quality), 1)
     score = round(max(0.0, min(1.0, ledger.coverage * (0.6 * mean_conf + 0.4 * min(1.0, page_conf + 0.1)))), 3)
+    if ocr:
+        # recognised text is never as sure as a text layer: weigh by what the engine says about itself, and stay below "good"
+        read = sum(len(p.chars) for p in pages) or 1
+        recognised = sum((p.ocr_confidence or 0.0) * len(p.chars) for p in pages) / read
+        score = round(min(score * recognised, OCR_SCORE_CAP), 3)
     grade = "good" if score >= 0.85 else "fair" if score >= 0.65 else "poor"
     counts = Counter(b.type for b in blocks)
     counts_d = {k: int(v) for k, v in counts.items()}
     counts_d["blocks"] = len(blocks)
     counts_d["flagged_blocks"] = sum(1 for b in blocks if any(f.severity != "info" for f in b.flags))
     return DocumentQuality(score=score, grade=grade, ledger=ledger, pages=page_quality, omitted=omitted,
-                           issues=issues, counts=counts_d, completeness=completeness)
+                           issues=issues, counts=counts_d, completeness=completeness, ocr=ocr)
 
 
 # ---- metadata ---------------------------------------------------------------------------------------------

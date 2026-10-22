@@ -11,6 +11,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from .. import __version__
 from ..fetch import InvalidSource, resolve_source
 from ..jobs import JobManager, QueueFull
+from ..parsing.ocr import ocr_available
 
 router = APIRouter()
 CHUNK = 1024 * 1024
@@ -27,10 +28,12 @@ def _not_found() -> HTTPException:
 @router.get("/capabilities")
 def capabilities(request: Request) -> dict:
     s = request.app.state.settings
+    ocr = s.ocr and ocr_available()  # switched on and the engine can be loaded (the import only happens when it is on)
     return {
         "version": __version__,
-        "parser": {"name": "folume-pdfplumber", "scanned_pdf_ocr": False},
-        "limits": {"max_upload_mb": s.max_upload_mb, "max_pages": s.max_pages},
+        "parser": {"name": "folume-pdfplumber", "scanned_pdf_ocr": ocr},
+        "ocr": ocr,
+        "limits": {"max_upload_mb": s.max_upload_mb, "max_pages": s.max_pages, "ocr_max_pages": s.ocr_max_pages},
         "retention_seconds": s.job_ttl_seconds,
         "uploads_persisted": False,
         "ai": {"enabled": request.app.state.ai.status().enabled, "vision": request.app.state.ai.status().vision},

@@ -6,10 +6,18 @@ ENV PYTHONUNBUFFERED=1 \
     FOLUME_DATA_DIR=/data/jobs \
     FOLUME_SYNC_DB=/data/sync.sqlite3
 
+# Optional OCR for scanned PDFs: docker build --build-arg WITH_OCR=1 ..., then run with -e FOLUME_OCR=1.
+# The engine pulls in OpenCV with a GUI dependency (libGL) that the slim image lacks: its headless build replaces it.
+ARG WITH_OCR=0
+
 WORKDIR /app
 COPY pyproject.toml ./
 COPY src ./src
-RUN pip install .
+RUN if [ "$WITH_OCR" = "1" ]; then \
+      pip install ".[ocr]" && pip uninstall -y opencv-python && pip install opencv-python-headless; \
+    else \
+      pip install .; \
+    fi
 
 # conversions run as an unprivileged user; /data holds the temporary job directories and the optional sync database
 RUN useradd --create-home --uid 10001 folume && mkdir -p /data && chown folume /data
