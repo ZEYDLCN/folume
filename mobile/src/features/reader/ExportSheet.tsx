@@ -13,7 +13,7 @@ import { space } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 import { getLocale } from '@/i18n';
 
-const FORMATS: PaperFormat[] = ['epub', 'html', 'markdown', 'text'];
+const FORMATS: PaperFormat[] = ['epub', 'html', 'markdown', 'text', 'xlsx'];
 
 /** Turns the open paper into an EPUB, a web page, Markdown or plain text, on the device, and shares the file. */
 export function ExportSheet({
@@ -40,6 +40,7 @@ export function ExportSheet({
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ file: string; detail: string } | null>(null);
   const [failed, setFailed] = useState(false);
+  const [noTables, setNoTables] = useState(false);
 
   const pickedLayout = layout ?? settings.layout;
   const pickedTheme = theme ?? settings.theme;
@@ -56,7 +57,7 @@ export function ExportSheet({
         {
           layout: pickedLayout,
           theme: pickedTheme,
-          fontFamily: settings.fontFamily,
+          fontFamily: settings.fontFamily === 'serif' ? 'serif' : 'sans',
           images,
           appendix,
           strings: getLocale() === 'tr' ? TR_EXPORT_STRINGS : EN_EXPORT_STRINGS,
@@ -68,8 +69,9 @@ export function ExportSheet({
         file: out.filename,
         detail: t('export.done.detail', { blocks: out.summary.blocks, images: out.summary.images, letters: out.summary.letters.toLocaleString() }),
       });
-    } catch {
+    } catch (e) {
       setFailed(true);
+      setNoTables(e instanceof Error && e.message === 'no_tables');
     } finally {
       setBusy(false);
     }
@@ -107,7 +109,7 @@ export function ExportSheet({
             />
           </Field>
         ) : null}
-        {format !== 'text' ? (
+        {format !== 'text' && format !== 'xlsx' ? (
           <View style={{ gap: 4 }}>
             <Row style={{ justifyContent: 'space-between' }}>
               <AppText style={{ flex: 1 }}>{t('export.images')}</AppText>
@@ -118,6 +120,7 @@ export function ExportSheet({
             </AppText>
           </View>
         ) : null}
+        {format !== 'xlsx' ? (
         <View style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <AppText style={{ flex: 1 }}>{t('export.appendix')}</AppText>
@@ -127,6 +130,7 @@ export function ExportSheet({
             {t('export.appendix.hint')}
           </AppText>
         </View>
+        ) : null}
         <Button
           label={busy ? t('export.working') : t('export.go')}
           icon="share-outline"
@@ -144,7 +148,7 @@ export function ExportSheet({
         ) : null}
         {failed ? (
           <AppText testID="export-error" color="#b45309">
-            {t('export.error')}
+            {t(noTables ? 'export.noTables' : 'export.error')}
           </AppText>
         ) : null}
       </View>

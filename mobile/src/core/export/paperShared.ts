@@ -2,7 +2,7 @@
 import { letterCount } from '../completeness';
 import type { Block, Document, Section, Span } from '../types';
 
-export type PaperFormat = 'epub' | 'html' | 'markdown' | 'text';
+export type PaperFormat = 'epub' | 'html' | 'markdown' | 'text' | 'xlsx';
 export type PaperLayout = 'book' | 'magazine';
 export type PaperTheme = 'paper' | 'sepia' | 'dark' | 'black';
 
@@ -70,6 +70,7 @@ export const MIME: Record<PaperFormat, string> = {
   html: 'text/html',
   markdown: 'text/markdown',
   text: 'text/plain',
+  xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
 };
 
 // ----------------------------------------------------------------------------------------------------- text safety

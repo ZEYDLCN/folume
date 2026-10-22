@@ -150,6 +150,9 @@ function syncClasses(): void {
     `m-${s.margin}`,
     `l-${s.layout}`,
     s.fontFamily === 'sans' ? 'sans' : '',
+    s.fontFamily === 'hyperlegible' ? 'ff-hyper' : '',
+    s.fontFamily === 'dyslexic' ? 'ff-dys' : '',
+    s.ruler ? 'ruler-on' : '',
     s.justify ? 'justify' : '',
     paged() ? 'f-paged' : '',
     state.mode === 'original' ? 'original' : '',
@@ -159,6 +162,18 @@ function syncClasses(): void {
   document.documentElement.classList.toggle('f-paged', paged());
 }
 
+/** Two translucent bands above and below a clear window in the middle of the screen. */
+function ensureRuler(on: boolean): void {
+  let ruler = document.getElementById('ruler');
+  if (!on) {
+    ruler?.remove();
+    return;
+  }
+  if (ruler) return;
+  ruler = el('div', null, { id: 'ruler', 'aria-hidden': 'true' }, el('div', 'rb top'), el('div', 'rb bottom'));
+  document.body.append(ruler);
+}
+
 function applySettings(s: ReaderSettings): void {
   const prev = state.settings;
   state.settings = s;
@@ -166,6 +181,9 @@ function applySettings(s: ReaderSettings): void {
   const root = document.documentElement.style;
   root.setProperty('--fs', `${s.fontSize}px`);
   root.setProperty('--lh', String(s.lineHeight));
+  root.setProperty('--ls', `${s.letterSpacing ?? 0}em`);
+  root.setProperty('--ws', `${s.wordSpacing ?? 0}em`);
+  ensureRuler(s.ruler);
   const bodyPt = state.doc?.body_font_size ?? 10;
   root.setProperty('--k', (s.fontSize / bodyPt).toFixed(4));
   if (prev && prev.showNotes !== s.showNotes) rerender();
@@ -279,6 +297,22 @@ function gotoBlock(id: string, offset = 0, doFlash = false): void {
   }
   scrollToEl(target, offset);
   if (doFlash) flash(target);
+}
+
+/** Brings a painted highlight into view if it is not already where the eye is. */
+function reveal(id: string): void {
+  const mark = document.querySelector<HTMLElement>(`mark.hl[data-h="${id}"]`);
+  if (!mark) return;
+  const r = mark.getBoundingClientRect();
+  const book = bookEl();
+  if (paged() && book) {
+    const x = r.left - book.getBoundingClientRect().left + book.scrollLeft;
+    const to = Math.floor(x / screenWidth()) * screenWidth();
+    if (Math.abs(book.scrollLeft - to) > 1) book.scrollTo({ left: to, behavior: 'auto' });
+    return;
+  }
+  const h = window.innerHeight;
+  if (r.top < h * 0.12 || r.bottom > h * 0.72) window.scrollTo({ top: Math.max(0, r.top + window.scrollY - h * 0.28), behavior: 'smooth' });
 }
 
 function gotoPage(page: number): void {
@@ -763,6 +797,9 @@ function handle(msg: HostMessage): void {
     case 'highlights':
       state.highlights = msg.items;
       paintHighlights(msg.items);
+      break;
+    case 'reveal':
+      reveal(msg.id);
       break;
     case 'terms':
       state.terms = msg.items;

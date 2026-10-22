@@ -8,6 +8,12 @@ import { indexDocument, readingMinutes, titleOf, type DocIndex } from '@/core/do
 import { citationSourceOf } from '@/core/export/citations';
 import { formatQuote } from '@/core/quote';
 import { copyText } from '@/services/clipboard';
+import { buildQueue, Speaker, type SpeakerState, type Utterance } from '@/core/speech';
+import { createSpeechEngine, speechAvailable } from '@/services/speech';
+import { ListenBar, RATES } from '@/features/reader/ListenBar';
+import { safeSheetName, tableToCsv, tablesToXlsx } from '@/core/export/table';
+import { shareBinaryFile, shareTextFile } from '@/services/share';
+import { slugify } from '@/core/export/paper';
 import type { FindHit } from '@/core/find';
 import type { Document } from '@/core/types';
 import type { DocState } from '@/data/library';
@@ -62,6 +68,11 @@ export default function ReaderScreen() {
   const [focusMode, setFocusMode] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const speaker = useRef<Speaker | null>(null);
+  const anchorRef = useRef<string | null>(null);
+  const [listen, setListen] = useState<{ state: SpeakerState; index: number; length: number } | null>(null);
+  const [spoken, setSpoken] = useState<Utterance | null>(null);
+  const [rate, setRate] = useState(1);
   const citationStyle = useSettings((s) => s.citationStyle);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [selection, setSelection] = useState<{ blockId: string; start: number; end: number; text: string } | null>(null);
@@ -141,8 +152,25 @@ export default function ReaderScreen() {
       const mark: HighlightView = { id: 'find:hit', blockId: found.blockId, start: found.range.start, end: found.range.end, color: '#ffc933', hasNote: false };
       views.push(mark);
     }
+    if (spoken) views.push({ id: 'find:speech', blockId: spoken.blockId, start: spoken.start, end: spoken.end, color: '#ffc933', hasNote: false });
     return views;
-  }, [annotations, finding, found]);
+  }, [annotations, finding, found, spoken]);
+
+  // the sentence being read aloud is brought into view once the reader has painted it
+  useEffect(() => {
+    if (spoken) reader.current?.send({ type: 'reveal', id: 'find:speech' });
+  }, [spoken]);
+
+  const stopListening = useCallback(() => {
+    speaker.current?.stop();
+    speaker.current = null;
+    setListen(null);
+    setSpoken(null);
+  }, []);
+  useEffect(() => () => speaker.current?.stop(), []);
+  useEffect(() => {
+    if (mode !== 'book') stopListening();
+  }, [mode, stopListening]);
 
   const onFound = useCallback((hit: FindHit | null) => {
     setFound(hit);
@@ -196,6 +224,7 @@ export default function ReaderScreen() {
               if (items.length) reader.current?.send({ type: 'terms', items: items.slice(0, 120) });
             });
           }
+          anchorRef.current = e.blockId;
           setPercent(e.percent);
           setPage(e.page);
           setScreen(e.view ?? null);
@@ -365,6 +394,17 @@ export default function ReaderScreen() {
               setLearn({ blockId: activeBlock.id });
               setLearnOpen(true);
             }}
+            onExportTable={(kind) => {
+              const table = activeBlock.table;
+              if (!table) return;
+              const cap = activeBlock.caption_id ? index.byId.get(activeBlock.caption_id)?.text : '';
+              const stem = slugify(`${titleOf(doc)} table ${activeBlock.number ?? ''}`);
+              if (kind === 'csv') void shareTextFile(`${stem}.csv`, tableToCsv(table.rows, { bom: true, safe: true }), 'text/csv');
+              else {
+                const name = safeSheetName(cap || `Table ${activeBlock.number ?? ''}`, new Set());
+                void shareBinaryFile(`${stem}.xlsx`, tablesToXlsx([{ name, rows: table.rows, headerRows: table.header_rows }]), 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+              }
+            }}
             bookmarked={bookmarkIds.includes(activeBlock.id)}
             onToggleBookmark={() => toggleBookmark(activeBlock.id)}
             onShowOriginal={() => showOriginal(activeBlock.id)}
@@ -375,6 +415,23 @@ export default function ReaderScreen() {
           />
         ) : null}
       </View>
+      {listen ? (
+        <ListenBar
+          state={listen.state}
+          index={listen.index}
+          length={listen.length}
+          rate={rate}
+          onToggle={() => (speaker.current?.state === 'playing' ? speaker.current.pause() : speaker.current?.resume())}
+          onPrev={() => speaker.current?.prev()}
+          onNext={() => speaker.current?.next()}
+          onRate={() => {
+            const next = RATES[(RATES.indexOf(rate) + 1) % RATES.length];
+            setRate(next);
+            speaker.current?.setRate(next);
+          }}
+          onClose={stopListening}
+        />
+      ) : null}
       {focusMode ? (
         <Pressable
           accessibilityRole="button"
@@ -413,6 +470,25 @@ export default function ReaderScreen() {
               ['report', warn ? 'warning-outline' : 'analytics-outline', t('reader.report'), () => router.push(`/report/${id}`)],
               ['export', 'share-outline', t('reader.export'), () => setExportOpen(true)],
               ['focus', 'expand-outline', t('reader.focus'), () => setFocusMode(true)],
+              ...(speechAvailable() && mode === 'book'
+                ? ([['listen', 'volume-high-outline', t('reader.listen'), () => {
+                    const queue = buildQueue(doc, anchorRef.current);
+                    if (!queue.length) return;
+                    speaker.current?.stop();
+                    const sp = new Speaker(createSpeechEngine(), queue, {
+                      lang: doc.metadata.language?.toLowerCase().startsWith('tr') ? 'tr-TR' : 'en-US',
+                      rate,
+                      onSentence: (u, i) => {
+                        setSpoken(u);
+                        setListen((l) => (l ? { ...l, index: i } : l));
+                      },
+                      onState: (st) => setListen((l) => (l ? { ...l, state: st } : l)),
+                    });
+                    speaker.current = sp;
+                    setListen({ state: 'playing', index: 0, length: queue.length });
+                    sp.play();
+                  }]] as [string, IconName, string, () => void][])
+                : []),
             ] as [string, IconName, string, () => void][]
           ).map(([key, icon, label, run]) => (
             <Pressable

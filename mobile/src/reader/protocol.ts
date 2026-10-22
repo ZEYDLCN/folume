@@ -5,7 +5,8 @@
 import type { Document } from '@/core/types';
 
 export type ThemeName = 'paper' | 'sepia' | 'dark' | 'black';
-export type FontFamily = 'serif' | 'sans';
+/** `hyperlegible` is Atkinson Hyperlegible (supports Turkish); `dyslexic` is OpenDyslexic (Latin letters only). */
+export type FontFamily = 'serif' | 'sans' | 'hyperlegible' | 'dyslexic';
 export type Margin = 'narrow' | 'normal' | 'wide';
 export type ReaderMode = 'book' | 'original';
 /** How the converted paper is set: like a book (one measure) or like a magazine (masthead, kickers, columns). */
@@ -25,6 +26,11 @@ export interface ReaderSettings {
   showNotes: boolean;
   layout: ReaderLayout;
   flow: ReaderFlow;
+  /** extra space between letters and between words, in em */
+  letterSpacing: number;
+  wordSpacing: number;
+  /** dims everything but the few lines in the middle of the screen, to keep the eye on the line being read */
+  ruler: boolean;
 }
 
 export const DEFAULT_READER_SETTINGS: ReaderSettings = {
@@ -37,6 +43,9 @@ export const DEFAULT_READER_SETTINGS: ReaderSettings = {
   showNotes: false,
   layout: 'book',
   flow: 'scroll',
+  letterSpacing: 0,
+  wordSpacing: 0,
+  ruler: false,
 };
 
 export interface ReaderStrings {
@@ -122,6 +131,8 @@ export type HostMessage =
   | { type: 'bookmarks'; ids: string[] }
   | { type: 'highlights'; items: HighlightView[] }
   | { type: 'terms'; items: TermView[] }
+  /** scroll (or turn the page) to a painted highlight, only if it is out of the comfortable part of the screen */
+  | { type: 'reveal'; id: string }
   | { type: 'clear-selection' }
   | { type: 'highlight-block'; blockId: string | null };
 

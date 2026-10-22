@@ -29,6 +29,20 @@ for (let i = 0; i < 60; i++) {
 
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'tr-TR' });
+// headless Chromium has no voices: a stand-in that records what would be said and "finishes" each sentence shortly after
+await context.addInitScript(() => {
+  window.__spoken = [];
+  window.__cancels = 0;
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    value: {
+      getVoices: () => [],
+      cancel() { window.__cancels += 1; clearTimeout(window.__speechTimer); },
+      speak(u) { window.__spoken.push({ text: u.text, rate: u.rate, lang: u.lang }); window.__speechTimer = setTimeout(() => u.onend && u.onend(), 300); },
+    },
+  });
+});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -126,6 +140,39 @@ await check('focus mode hides the controls, keeps the position and brings them b
   await page.getByTestId('focus-exit').click();
   await page.getByTestId('reader-back').waitFor();
   assert(/dk kaldı|Bitti/.test(await page.getByTestId('reader-position').textContent()), 'time left shown in the header');
+});
+
+await check('listening: the paper is read sentence by sentence, the sentence is marked, and the controls work', async () => {
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-listen').click();
+  await page.getByTestId('listen-bar').waitFor();
+  const spoken = () => page.evaluate(() => window.__spoken.map((s) => s.text));
+  await page.waitForFunction(() => window.__spoken.length >= 2, null, { timeout: 8000 });
+  const first = (await spoken())[0];
+  assert(first.length > 5 && !/\[\d+\]/.test(first), `first sentence: ${first}`);
+  assert((await page.evaluate(() => window.__spoken[0].lang)) === 'en-US', 'language of the paper');
+  assert(/Cümle \d+ \/ \d+/.test(await page.getByTestId('listen-count').textContent()), 'counter');
+  await frame().locator('mark.hl[data-h="find:speech"]').first().waitFor({ timeout: 5000 });
+  // pause: nothing more is said
+  await page.getByTestId('listen-toggle').click();
+  await page.waitForTimeout(150);
+  const n = (await spoken()).length;
+  await page.waitForTimeout(400);
+  assert((await spoken()).length === n, 'paused speech must stay silent');
+  // resume repeats the sentence that was interrupted, at the new speed
+  await page.getByTestId('listen-rate').click();
+  assert((await page.getByTestId('listen-rate').textContent()).includes('1.25'), 'speed label');
+  await page.getByTestId('listen-toggle').click();
+  await page.waitForFunction((k) => window.__spoken.length > k, n, { timeout: 5000 }).catch(async (e) => { throw new Error(`${e.message}\nspoken=${JSON.stringify(await page.evaluate(() => [window.__spoken.length, window.__cancels, window.__spoken.slice(-2)]))} n=${n} toggle=${await page.getByTestId('listen-toggle').getAttribute('aria-label')}`); });
+  assert((await page.evaluate(() => window.__spoken[window.__spoken.length - 1].rate)) === 1.25, 'new speed is used');
+  await shot('listen');
+  await page.getByTestId('listen-next').click();
+  await page.getByTestId('listen-close').click();
+  assert((await page.getByTestId('listen-bar').count()) === 0, 'bar closed');
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('mark.hl[data-h="find:speech"]').length === 0);
+  const after = (await spoken()).length;
+  await page.waitForTimeout(300);
+  assert((await spoken()).length === after, 'closing stops the voice');
 });
 
 await check('tapping a block offers original + bookmark; bookmarks survive a reload', async () => {

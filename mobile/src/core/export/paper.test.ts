@@ -519,6 +519,22 @@ describe('exportPaper', () => {
   });
 });
 
+describe('tables as a workbook', () => {
+  it('exports every readable table as a sheet and names the file after the paper', async () => {
+    const out = await exportPaper(acmGraph, 'xlsx', { now: NOW }, async () => null);
+    expect(out.filename).toMatch(/-tables\.xlsx$/);
+    expect(out.mime).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(out.summary.blocks).toBe(2);
+    expect([...unzip(out.bytes).keys()]).toContain('xl/worksheets/sheet2.xml');
+  });
+
+  it('says so when there is no table with readable cells', async () => {
+    const doc = clone(ieeeMl);
+    doc.blocks.filter((b) => b.type === 'table').forEach((b) => (b.table = null));
+    await expect(exportPaper(doc, 'xlsx', {}, async () => null)).rejects.toThrow('no_tables');
+  });
+});
+
 describe('speed', () => {
   it('converts a 60-page-sized paper in well under a few seconds in every format', async () => {
     const big = clone(ieeeMl);

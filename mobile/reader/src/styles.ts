@@ -13,6 +13,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg)}
 body{font-family:var(--font);font-size:var(--fs);line-height:var(--lh);-webkit-text-size-adjust:100%;
   padding-top:env(safe-area-inset-top);padding-bottom:calc(env(safe-area-inset-bottom) + 120px);overflow-wrap:anywhere}
 body.sans{--font:var(--sans)}
+body.ff-hyper{--font:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',var(--sans)}
+body.ff-dys{--font:'OpenDyslexic',var(--sans)}
+body{letter-spacing:var(--ls,0);word-spacing:var(--ws,0)}
+#ruler{position:fixed;inset:0;z-index:20;pointer-events:none}
+#ruler .rb{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--bg) 62%,transparent)}
+#ruler .top{top:0;height:calc(44vh - 1.3em)}
+#ruler .bottom{top:calc(44vh + 1.3em + var(--lh) * 1em);bottom:0}
 body.justify .blk-paragraph,body.justify .li .lt,body.justify .fn,body.justify .ref .rt{text-align:justify;hyphens:auto;-webkit-hyphens:auto}
 #book{max-width:46em;margin:0 auto;padding:10px var(--pad) 40px}
 .blk{position:relative;margin:0 0 .85em;scroll-margin-top:10px;border-radius:4px}
@@ -101,6 +108,7 @@ body.original #orig{display:block}
 .pill.back{left:14px;right:auto;transform:none;background:var(--card);color:var(--fg);border:1px solid var(--border);z-index:35}
 .pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:30;border:0;border-radius:999px;
   padding:10px 16px;font:600 13px var(--sans);color:#fff;background:#1d2433;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+${typeof __FONT_CSS__ === 'string' ? __FONT_CSS__ : ''}
 /* ---------------------------------------------------------------- magazine layout */
 body.l-magazine #book{max-width:64em}
 body.l-magazine .title{column-span:all;font-size:2.3em;font-weight:800;line-height:1.05;letter-spacing:-.025em;margin:.7em 0 .35em}

@@ -130,6 +130,13 @@ await check('plain text, and the removed page text can be left out', async () =>
   manifest.push({ file: 'no-appendix.txt', format: 'text', appendix: false });
 });
 
+await check('the tables can be taken out as an Excel workbook', async () => {
+  await pick('Tables (Excel)');
+  assert((await page.getByTestId('export-images').count()) === 0 && (await page.getByTestId('export-appendix').count()) === 0, 'no picture or appendix switches for tables');
+  const file = await run({ format: 'xlsx', appendix: true });
+  assert(file.endsWith('-tables.xlsx'), file);
+});
+
 assert(errors.length === 0, `page errors: ${errors.join(' | ')}`);
 writeFileSync(path.join(out, 'exports.json'), JSON.stringify(manifest, null, 2));
 await page.getByTestId('sheet-close').click().catch(() => {});

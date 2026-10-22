@@ -84,8 +84,15 @@ export function TypographyControls({
           options={[
             { value: 'serif', label: t('typo.font.serif') },
             { value: 'sans', label: t('typo.font.sans') },
+            { value: 'hyperlegible', label: t('typo.font.hyperlegible') },
+            { value: 'dyslexic', label: t('typo.font.dyslexic') },
           ]}
         />
+        {settings.fontFamily === 'dyslexic' ? (
+          <AppText variant="caption" muted>
+            {t('typo.font.dyslexic.hint')}
+          </AppText>
+        ) : null}
       </Field>
 
       <Field label={t('typo.size')}>
@@ -95,6 +102,24 @@ export function TypographyControls({
       <Field label={t('typo.lineHeight')}>
         <Stepper value={settings.lineHeight} min={1.3} max={2.1} step={0.1} onChange={(lineHeight) => onChange({ lineHeight })} format={(v) => v.toFixed(1)} />
       </Field>
+
+      <Field label={t('typo.letterSpacing')}>
+        <Stepper value={settings.letterSpacing} min={0} max={0.16} step={0.02} onChange={(letterSpacing) => onChange({ letterSpacing: Math.round(letterSpacing * 100) / 100 })} format={(v) => v.toFixed(2)} />
+      </Field>
+
+      <Field label={t('typo.wordSpacing')}>
+        <Stepper value={settings.wordSpacing} min={0} max={0.5} step={0.05} onChange={(wordSpacing) => onChange({ wordSpacing: Math.round(wordSpacing * 100) / 100 })} format={(v) => v.toFixed(2)} />
+      </Field>
+
+      <View style={{ gap: 4 }}>
+        <Row style={{ justifyContent: 'space-between' }}>
+          <AppText style={{ flex: 1 }}>{t('typo.ruler')}</AppText>
+          <AppSwitch value={settings.ruler} onValueChange={(ruler) => onChange({ ruler })} testID="switch-ruler" />
+        </Row>
+        <AppText variant="caption" muted>
+          {t('typo.ruler.hint')}
+        </AppText>
+      </View>
 
       <Field label={t('typo.margin')}>
         <Segmented
