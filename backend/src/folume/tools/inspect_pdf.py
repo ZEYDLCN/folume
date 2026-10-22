@@ -1,6 +1,8 @@
 """Developer tool: parse a PDF, print the blocks and write page overlays showing block regions.
 
-    python -m folume.tools.inspect_pdf paper.pdf out_dir [--text]
+    python -m folume.tools.inspect_pdf paper.pdf out_dir [--text] [--ocr]
+
+`--ocr` reads a scanned PDF (no text layer) with OCR; it needs the `ocr` extra.
 """
 
 from __future__ import annotations
@@ -11,7 +13,7 @@ from pathlib import Path
 
 from PIL import Image, ImageDraw
 
-from folume.parsing.pipeline import parse_pdf
+from folume.parsing.pipeline import ParseOptions, parse_pdf
 
 COLORS = {
     "title": "#d81b60", "authors": "#8e24aa", "heading": "#e53935", "paragraph": "#1e88e5", "list_item": "#00897b",
@@ -25,7 +27,7 @@ def main(argv: list[str]) -> int:
     out = Path(argv[2])
     show_text = "--text" in argv
     out.mkdir(parents=True, exist_ok=True)
-    res = parse_pdf(pdf.read_bytes(), pdf.name)
+    res = parse_pdf(pdf.read_bytes(), pdf.name, ParseOptions(ocr="--ocr" in argv))
     doc = res.document
     q = doc.quality
     print(f"{pdf.name}: {len(doc.blocks)} blocks, {len(doc.sections)} sections, grade={q.grade} score={q.score} "

@@ -52,7 +52,8 @@ FlagCode = Literal[
     "caption_unlinked",  # caption found but no figure/table matched it
     "reference_unparsed",  # bibliography entry could not be split reliably
     # document level
-    "no_text_layer",  # scanned PDF: no extractable text (OCR is out of scope)
+    "no_text_layer",  # scanned PDF: no extractable text (and OCR is off or unavailable)
+    "ocr_text",  # the text was recognised from page images by OCR and may contain mistakes
     "low_text_coverage",  # ledger could not account for enough of the text layer
     "rotated_text_skipped",  # rotated text exists and was not converted
     "text_recovered",  # characters the layout analysis could not place; shown here so no text is lost
@@ -254,9 +255,15 @@ class Completeness(Model):
 
     Counts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).
     `complete` is true when nothing is missing and nothing was invented.
+
+    `source` says what the PDF side of the comparison is. For `text_layer` it is the text the PDF itself carries, so
+    `complete` means the document has every letter of the PDF. For `ocr` there is no such text: the comparison is with
+    what the OCR engine read from the page images, so `complete` only means nothing the engine read was lost, never that
+    the text is exact.
     """
 
     complete: bool
+    source: Literal["text_layer", "ocr"] = "text_layer"
     letters_in_pdf: int
     in_text: int = Field(description="Letters in reading text: paragraphs, headings, lists, captions, references, ...")
     in_equations: int
@@ -281,6 +288,9 @@ class DocumentQuality(Model):
     counts: dict[str, int] = Field(default_factory=dict)
     completeness: Completeness | None = Field(
         default=None, description="Null only for documents without a text layer (nothing to compare)"
+    )
+    ocr: bool = Field(
+        default=False, description="True when the text was recognised by OCR from page images, not read from a text layer"
     )
 
 

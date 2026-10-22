@@ -4,12 +4,16 @@ The unit of comparison is a letter or digit after Unicode NFKC folding, case kep
 other punctuation are layout, not content: hyphen repair legitimately removes some, and a ligature glyph and the
 two letters it stands for are the same text. Comparing multisets of these units cannot be satisfied by reordering
 tricks, and it does not depend on how the converter reached its result.
+
+A PDF without a text layer that was read by OCR is audited against what the engine recognised (`source="ocr"`): that
+proves no recognised letter was lost on the way to the document, not that the recognition itself was right.
 """
 
 from __future__ import annotations
 
 import unicodedata
 from collections import Counter
+from typing import Literal
 
 from ..model import Block, Completeness, CompletenessProblem, Document, OmittedRegion
 from .types import RawPage
@@ -94,7 +98,8 @@ def _locate(pages: list[RawPage], blocks: list[Block], omitted: list[OmittedRegi
     return problems[:MAX_PROBLEMS]
 
 
-def audit_pages(pages: list[RawPage], blocks: list[Block], omitted: list[OmittedRegion]) -> Completeness:
+def audit_pages(pages: list[RawPage], blocks: list[Block], omitted: list[OmittedRegion],
+                source: Literal["text_layer", "ocr"] = "text_layer") -> Completeness:
     read, hidden, dupes = raw_letters(pages)
     reference = read + hidden + dupes
     out_text = out_eq = out_tab = out_fig = out_rec = 0
@@ -122,7 +127,7 @@ def audit_pages(pages: list[RawPage], blocks: list[Block], omitted: list[Omitted
     n_missing, n_extra = sum(missing.values()), sum(extra.values())
     problems = _locate(pages, blocks, omitted) if (n_missing or n_extra) else []
     return Completeness(
-        complete=n_missing == 0 and n_extra == 0,
+        complete=n_missing == 0 and n_extra == 0, source=source,
         letters_in_pdf=sum(reference.values()),
         in_text=out_text, in_equations=out_eq, in_tables=out_tab, in_figures=out_fig,
         omitted=sum(om.values()), duplicates=sum(dupes.values()), hidden=sum(hidden.values()), recovered=out_rec,
@@ -132,8 +137,11 @@ def audit_pages(pages: list[RawPage], blocks: list[Block], omitted: list[Omitted
 
 def audit_document(data: bytes, doc: Document) -> Completeness:
     """Audit a finished document against its PDF again, independently of the conversion run."""
-    from .raw import extract_pages  # noqa: PLC0415 (heavy import, only needed here)
+    from .ocr import ocr_pages  # noqa: PLC0415 (heavy imports, only needed here)
+    from .raw import extract_pages  # noqa: PLC0415
 
+    if doc.quality.ocr:  # there is no text layer to read again: the engine reads the pages again (same models, same text)
+        return audit_pages(ocr_pages(data), doc.blocks, doc.quality.omitted, source="ocr")
     pages, _ = extract_pages(data)
     return audit_pages(pages, doc.blocks, doc.quality.omitted)
 

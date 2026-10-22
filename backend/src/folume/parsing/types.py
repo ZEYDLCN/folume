@@ -161,6 +161,8 @@ class RawPage:
     graphics: list[Bbox] = field(default_factory=list)  # non-rule paths, filled rects
     images: list[Bbox] = field(default_factory=list)
     rotation: int = 0
+    # OCR pages only: mean recognition confidence of the lines read (0..1); None for a text layer or a page without text
+    ocr_confidence: float | None = None
     # text that was read but is not part of `chars`, kept so the completeness audit can account for it
     hidden: str = ""  # glyphs below half a point (invisible)
     duplicates: str = ""  # overprinted copies of a glyph already read (fake bold)
