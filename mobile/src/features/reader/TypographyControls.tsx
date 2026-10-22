@@ -1,12 +1,12 @@
-import { Pressable, Switch, View } from 'react-native';
+import { Pressable, View } from 'react-native';
 
 import type { ReaderSettings, ThemeName } from '@/reader/protocol';
-import { AppText, Field, Row, Segmented, Stepper } from '@/ui/components';
+import { AppSwitch, AppText, Field, Row, Segmented, Stepper } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
 const SWATCH: Record<ThemeName, { bg: string; fg: string }> = {
-  paper: { bg: '#fbfaf7', fg: '#1c1b19' },
+  paper: { bg: '#fcf1e5', fg: '#3e2418' },
   sepia: { bg: '#f4ecd8', fg: '#433422' },
   dark: { bg: '#17181b', fg: '#d6d6d9' },
   black: { bg: '#000000', fg: '#c9c9cc' },
@@ -110,13 +110,13 @@ export function TypographyControls({
 
       <Row style={{ justifyContent: 'space-between' }}>
         <AppText>{t('typo.justify')}</AppText>
-        <Switch value={settings.justify} onValueChange={(justify) => onChange({ justify })} testID="switch-justify" />
+        <AppSwitch value={settings.justify} onValueChange={(justify) => onChange({ justify })} testID="switch-justify" />
       </Row>
 
       <View style={{ gap: 4 }}>
         <Row style={{ justifyContent: 'space-between' }}>
           <AppText style={{ flex: 1 }}>{t('typo.showNotes')}</AppText>
-          <Switch value={settings.showNotes} onValueChange={(showNotes) => onChange({ showNotes })} testID="switch-notes" />
+          <AppSwitch value={settings.showNotes} onValueChange={(showNotes) => onChange({ showNotes })} testID="switch-notes" />
         </Row>
         <AppText variant="caption" muted>
           {t('typo.showNotes.hint')}

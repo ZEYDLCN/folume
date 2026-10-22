@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { View } from 'react-native';
 
 import type { Document } from '@/core/types';
 import {
@@ -8,7 +8,7 @@ import {
 import type { LibraryRepo } from '@/data/library';
 import type { ReaderSettings } from '@/reader/protocol';
 import { shareBinaryFile } from '@/services/share';
-import { AppText, Button, Field, Row, Segmented, Sheet } from '@/ui/components';
+import { AppSwitch, AppText, Button, Field, Row, Segmented, Sheet } from '@/ui/components';
 import { space } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 import { getLocale } from '@/i18n';
@@ -111,7 +111,7 @@ export function ExportSheet({
           <View style={{ gap: 4 }}>
             <Row style={{ justifyContent: 'space-between' }}>
               <AppText style={{ flex: 1 }}>{t('export.images')}</AppText>
-              <Switch value={images} onValueChange={setImages} testID="export-images" />
+              <AppSwitch value={images} onValueChange={setImages} testID="export-images" />
             </Row>
             <AppText variant="caption" muted>
               {t('export.images.hint')}
@@ -121,7 +121,7 @@ export function ExportSheet({
         <View style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <AppText style={{ flex: 1 }}>{t('export.appendix')}</AppText>
-            <Switch value={appendix} onValueChange={setAppendix} testID="export-appendix" />
+            <AppSwitch value={appendix} onValueChange={setAppendix} testID="export-appendix" />
           </Row>
           <AppText variant="caption" muted>
             {t('export.appendix.hint')}

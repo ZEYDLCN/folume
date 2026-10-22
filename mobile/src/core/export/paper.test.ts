@@ -203,7 +203,7 @@ describe('standalone HTML', () => {
     expect(dark).toContain('#17181b');
     expect(dark).toContain('class="l-magazine"');
     expect(dark).toContain('column-count:2');
-    expect(html).toContain('#fbfaf7');
+    expect(html).toContain('#fcf1e5');
     expect(html).toContain('class="l-book"');
     expect(html).not.toContain('column-count');
   });

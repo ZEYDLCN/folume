@@ -1,7 +1,8 @@
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, FlatList, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 
 import { pickContinue } from '@/core/continueReading';
 import { LibraryCard } from '@/features/library/LibraryCard';
@@ -14,13 +15,15 @@ import { pickPdf } from '@/services/picker';
 import type { PdfSource } from '@/services/importer';
 import { useImport } from '@/services/useImport';
 import { AppText, Button, Card, IconButton, ProgressBar } from '@/ui/components';
-import { radius, space, useColors } from '@/ui/theme';
+import { Logo } from '@/ui/Logo';
+import { radius, serif, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
 export default function LibraryScreen() {
   const t = useT();
   const c = useColors();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [entries, setEntries] = useState<LibraryEntry[] | null>(null);
   const [query, setQuery] = useState('');
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -89,23 +92,49 @@ export default function LibraryScreen() {
   }, [entries, query, activeTag]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }} edges={['left', 'right']}>
       <View style={{ flex: 1, width: '100%', maxWidth: 720, alignSelf: 'center' }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.lg, paddingTop: space.md }}>
-          <View style={{ flex: 1 }}>
-            <AppText variant="title">{t('library.title')}</AppText>
+        <View
+          style={{
+            backgroundColor: c.brand,
+            borderBottomLeftRadius: radius.xl,
+            borderBottomRightRadius: radius.xl,
+            paddingTop: insets.top + space.sm,
+            paddingHorizontal: space.lg,
+            paddingBottom: space.lg,
+            gap: space.md,
+          }}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
+            <Logo size={38} tile />
+            <View style={{ flex: 1 }}>
+              <AppText variant="title" color={c.brandText} style={{ fontSize: 26, lineHeight: 30 }}>
+                Folume
+              </AppText>
+            </View>
+            <View>
+              <IconButton icon="albums-outline" label={t('library.reviewOpen')} onPress={() => router.push('/review')} testID="open-review" color={c.brandText} />
+              {due > 0 ? (
+                <View pointerEvents="none" style={{ position: 'absolute', top: 2, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }} accessibilityLabel={t('library.reviewDue', { n: due })} testID="review-badge">
+                  <AppText variant="caption" color="#fff" style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>{due > 99 ? '99+' : due}</AppText>
+                </View>
+              ) : null}
+            </View>
+            <IconButton icon="create-outline" label={t('notes.title')} onPress={() => router.push('/notes')} testID="open-notes" color={c.brandText} />
+            <IconButton icon="settings-outline" label={t('settings.title')} onPress={() => router.push('/settings')} testID="open-settings" color={c.brandText} />
           </View>
-          <IconButton icon="search" label={t('library.searchOpen')} onPress={() => router.push('/search')} testID="open-search" />
-          <View>
-            <IconButton icon="albums-outline" label={t('library.reviewOpen')} onPress={() => router.push('/review')} testID="open-review" />
-            {due > 0 ? (
-              <View pointerEvents="none" style={{ position: 'absolute', top: 2, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }} accessibilityLabel={t('library.reviewDue', { n: due })} testID="review-badge">
-                <AppText variant="caption" color={c.accentText} style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>{due > 99 ? '99+' : due}</AppText>
-              </View>
-            ) : null}
-          </View>
-          <IconButton icon="create-outline" label={t('notes.title')} onPress={() => router.push('/notes')} testID="open-notes" />
-          <IconButton icon="settings-outline" label={t('settings.title')} onPress={() => router.push('/settings')} testID="open-settings" />
+          <Pressable
+            onPress={() => router.push('/search')}
+            accessibilityRole="search"
+            accessibilityLabel={t('library.searchOpen')}
+            testID="open-search"
+            style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, height: 48, borderRadius: radius.pill, paddingHorizontal: space.lg, backgroundColor: c.surface }}
+          >
+            <Ionicons name="search" size={19} color={c.muted} />
+            <AppText muted style={{ flex: 1 }}>
+              {t('library.searchPill')}
+            </AppText>
+          </Pressable>
         </View>
 
         {entries && entries.length > 3 ? (
@@ -152,27 +181,37 @@ export default function LibraryScreen() {
         <FlatList
           data={shown}
           ListHeaderComponent={
-            resume ? (
-              <Pressable
-                onPress={() => router.push(`/reader/${resume.id}`)}
-                accessibilityRole="button"
-                accessibilityLabel={`${t('library.continue')}: ${resume.title}`}
-                testID="continue-card"
-              >
-                <Card style={{ gap: space.sm, borderColor: c.accent, marginBottom: space.xs }}>
-                  <AppText variant="label" color={c.accent}>
-                    {t('library.continue')}
-                  </AppText>
-                  <AppText variant="heading" numberOfLines={2}>
-                    {resume.title}
-                  </AppText>
-                  <ProgressBar value={resume.percent / 100} />
-                  <AppText variant="caption" muted>
-                    {t('library.progress', { n: Math.round(resume.percent) })}
-                  </AppText>
-                </Card>
-              </Pressable>
-            ) : undefined
+            <View style={{ gap: space.md }}>
+              {resume ? (
+                <Pressable
+                  onPress={() => router.push(`/reader/${resume.id}`)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('library.continue')}: ${resume.title}`}
+                  testID="continue-card"
+                >
+                  <Card style={{ gap: space.sm, borderRadius: radius.xl, padding: space.xl, backgroundColor: c.surface }}>
+                    <AppText variant="label" color={c.accent}>
+                      {t('library.continue')}
+                    </AppText>
+                    <AppText variant="heading" numberOfLines={2} style={{ fontSize: 23, lineHeight: 29 }}>
+                      {resume.title}
+                    </AppText>
+                    <AppText variant="caption" muted>
+                      {t('library.progress', { n: Math.round(resume.percent) })}
+                    </AppText>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginTop: space.xs }}>
+                      <View style={{ flex: 1 }}>
+                        <ProgressBar value={resume.percent / 100} height={6} />
+                      </View>
+                      <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: c.accent, alignItems: 'center', justifyContent: 'center' }}>
+                        <Ionicons name="play" size={22} color={c.accentText} style={{ marginLeft: 3 }} />
+                      </View>
+                    </View>
+                  </Card>
+                </Pressable>
+              ) : null}
+              {shown.length ? <AppText variant="heading" style={{ fontSize: 22 }}>{t('library.title')}</AppText> : null}
+            </View>
           }
           keyExtractor={(e) => e.id}
           contentContainerStyle={{ padding: space.lg, gap: space.md, paddingBottom: 120, flexGrow: 1 }}
@@ -188,6 +227,7 @@ export default function LibraryScreen() {
           ListEmptyComponent={
             entries === null ? undefined : entries.length === 0 ? (
               <Card style={{ gap: space.md, marginTop: space.xl }}>
+                <Logo size={64} tile />
                 <AppText variant="heading">{t('library.empty.title')}</AppText>
                 <AppText muted>{t('library.empty.body')}</AppText>
                 <View style={{ gap: space.sm }}>

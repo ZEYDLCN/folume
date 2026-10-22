@@ -1,6 +1,6 @@
 export const CSS = `
 :root{
-  --bg:#fbfaf7;--fg:#1c1b19;--muted:#6b675f;--accent:#2457d6;--card:#f1efe9;--border:#dcd8cd;
+  --bg:#fcf1e5;--fg:#3e2418;--muted:#7a5a4b;--accent:#c2512f;--card:#f6e3d1;--border:#e8cdb6;
   --mark:#ffe58a;--warn:#b45309;--warnbg:#fff4e0;--fs:18px;--lh:1.6;--pad:22px;--k:1.8;
   --font:Georgia,'Times New Roman',serif;--sans:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 }

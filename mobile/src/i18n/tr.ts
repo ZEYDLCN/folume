@@ -339,6 +339,7 @@ export const tr = {
   'settings.ai.level': 'Açıklama düzeyi',
   'settings.ai.language': 'Yanıt dili',
   'settings.ai.translate': 'Çeviri dili',
+  'library.searchPill': 'Tüm makalelerde ara…',
   'library.searchOpen': 'Tüm makalelerde ara',
   'library.reviewOpen': 'Tekrar',
   'library.reviewDue': '{n} kart tekrar bekliyor',

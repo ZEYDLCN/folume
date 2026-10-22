@@ -330,6 +330,7 @@ export const en: Record<StringKey, string> = {
   'settings.ai.level': 'Explanation level',
   'settings.ai.language': 'Answer language',
   'settings.ai.translate': 'Translate into',
+  'library.searchPill': 'Search all your papers…',
   'library.searchOpen': 'Search all papers',
   'library.reviewOpen': 'Review',
   'library.reviewDue': '{n} cards due for review',

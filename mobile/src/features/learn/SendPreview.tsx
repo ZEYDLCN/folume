@@ -1,8 +1,8 @@
-import { Image, Switch, View } from 'react-native';
+import { Image, View } from 'react-native';
 
 import type { ContextPassage } from '@/core/retrieval/context';
 import type { StringKey } from '@/i18n';
-import { AppText, Button, Card } from '@/ui/components';
+import { AppSwitch, AppText, Button, Card } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
@@ -51,7 +51,7 @@ export function SendPreview({
               </AppText>
             </View>
             {i === 0 ? null : (
-              <Switch value={included.has(p.id)} onValueChange={() => onToggle(p.id)} testID={`include-${p.id}`} />
+              <AppSwitch value={included.has(p.id)} onValueChange={() => onToggle(p.id)} testID={`include-${p.id}`} />
             )}
           </View>
           <AppText numberOfLines={4} variant="caption">
@@ -71,7 +71,7 @@ export function SendPreview({
                 {t('learn.preview.imagesHint')}
               </AppText>
             </View>
-            <Switch value={!!imageOn} onValueChange={(v) => onToggleImage?.(v)} testID="include-image" />
+            <AppSwitch value={!!imageOn} onValueChange={(v) => onToggleImage?.(v)} testID="include-image" />
           </View>
           <View style={{ backgroundColor: '#fff', borderRadius: 8, borderWidth: 1, borderColor: c.border, padding: 6, alignItems: 'center' }}>
             <ImageThumb uri={image.uri} />

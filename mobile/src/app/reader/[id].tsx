@@ -249,7 +249,7 @@ export default function ReaderScreen() {
   const total = doc.pages.length;
   const warn = doc.quality.grade !== 'good';
   const minutesLeft = Math.ceil(readingMinutes(doc) * (1 - percent / 100));
-  const readerBg = { paper: '#fbfaf7', sepia: '#f4ecd8', dark: '#17181b', black: '#000000' }[settings.theme];
+  const readerBg = { paper: '#fcf1e5', sepia: '#f4ecd8', dark: '#17181b', black: '#000000' }[settings.theme];
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: readerBg }} edges={['top', 'left', 'right']}>

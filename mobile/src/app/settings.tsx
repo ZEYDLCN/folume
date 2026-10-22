@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
-import { ScrollView, Switch, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { TypographyControls } from '@/features/reader/TypographyControls';
@@ -10,7 +10,7 @@ import { getApi } from '@/services/container';
 import { eraseRemote, lastSyncAt, MIN_SYNC_KEY_LENGTH, runSync, syncErrorKey } from '@/services/sync';
 import type { Capabilities } from '@/services/api';
 import { useSettings, type AiPrefs, type AppTheme } from '@/state/settings';
-import { AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
+import { AppSwitch, AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
@@ -170,18 +170,18 @@ export default function SettingsScreen() {
           <View style={{ gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <AppText style={{ flex: 1 }}>{t('settings.ai.enable')}</AppText>
-              <Switch value={s.ai.enabled} onValueChange={(enabled) => void s.updateAi({ enabled })} testID="switch-ai" />
+              <AppSwitch value={s.ai.enabled} onValueChange={(enabled) => void s.updateAi({ enabled })} testID="switch-ai" />
             </View>
             <AppText variant="caption" muted>{t('settings.ai.enable.hint')}</AppText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <AppText style={{ flex: 1 }}>{t('settings.ai.confirm')}</AppText>
-            <Switch value={s.ai.confirmBeforeSend} onValueChange={(confirmBeforeSend) => void s.updateAi({ confirmBeforeSend })} testID="switch-confirm" />
+            <AppSwitch value={s.ai.confirmBeforeSend} onValueChange={(confirmBeforeSend) => void s.updateAi({ confirmBeforeSend })} testID="switch-confirm" />
           </View>
           <View style={{ gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <AppText style={{ flex: 1 }}>{t('settings.ai.images')}</AppText>
-              <Switch value={s.ai.shareImages} onValueChange={(shareImages) => void s.updateAi({ shareImages })} testID="switch-images" />
+              <AppSwitch value={s.ai.shareImages} onValueChange={(shareImages) => void s.updateAi({ shareImages })} testID="switch-images" />
             </View>
             <AppText variant="caption" muted>{t('settings.ai.images.hint')}</AppText>
           </View>
@@ -228,7 +228,7 @@ export default function SettingsScreen() {
           <AppText muted>{t('sync.body')}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <AppText style={{ flex: 1 }}>{t('sync.enable')}</AppText>
-            <Switch value={s.sync.enabled} onValueChange={(enabled) => void s.updateSync({ enabled })} testID="switch-sync" />
+            <AppSwitch value={s.sync.enabled} onValueChange={(enabled) => void s.updateSync({ enabled })} testID="switch-sync" />
           </View>
           {s.sync.enabled ? (
             <View style={{ gap: space.md }}>

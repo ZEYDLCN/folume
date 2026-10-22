@@ -6,6 +6,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   View,
   type StyleProp,
@@ -14,15 +15,15 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import { radius, space, useColors } from './theme';
+import { radius, serif, space, useColors } from './theme';
 
 export type IconName = ComponentProps<typeof Ionicons>['name'];
 
 type Variant = 'title' | 'heading' | 'body' | 'caption' | 'label';
 
 const textStyles: Record<Variant, TextStyle> = {
-  title: { fontSize: 28, fontWeight: '700', letterSpacing: -0.4 },
-  heading: { fontSize: 18, fontWeight: '700' },
+  title: { fontSize: 30, fontWeight: '700', letterSpacing: -0.4, fontFamily: serif },
+  heading: { fontSize: 19, fontWeight: '700', fontFamily: serif },
   body: { fontSize: 15, lineHeight: 22 },
   caption: { fontSize: 13, lineHeight: 18 },
   label: { fontSize: 12, fontWeight: '600', letterSpacing: 0.4, textTransform: 'uppercase' },
@@ -107,6 +108,7 @@ export function IconButton({
   active,
   testID,
   size = 22,
+  color,
 }: {
   icon: IconName;
   onPress: () => void;
@@ -114,6 +116,8 @@ export function IconButton({
   active?: boolean;
   testID?: string;
   size?: number;
+  /** icon colour, for use on the terracotta header */
+  color?: string;
 }) {
   const c = useColors();
   return (
@@ -125,7 +129,7 @@ export function IconButton({
       onPress={onPress}
       style={({ pressed }) => [styles.iconButton, { backgroundColor: active ? c.surfaceAlt : 'transparent', opacity: pressed ? 0.6 : 1 }]}
     >
-      <Ionicons name={icon} size={size} color={active ? c.accent : c.text} />
+      <Ionicons name={icon} size={size} color={color ?? (active ? c.accent : c.text)} />
     </Pressable>
   );
 }
@@ -254,6 +258,22 @@ export function Sheet({
   );
 }
 
+/** A switch in the app's colours: terracotta when on. */
+export function AppSwitch({ value, onValueChange, testID }: { value: boolean; onValueChange: (v: boolean) => void; testID?: string }) {
+  const c = useColors();
+  return (
+    <Switch
+      value={value}
+      onValueChange={onValueChange}
+      testID={testID}
+      trackColor={{ true: c.accent, false: c.border }}
+      thumbColor="#ffffff"
+      // react-native-web paints the thumb and track from these
+      {...({ activeThumbColor: '#ffffff' } as object)}
+    />
+  );
+}
+
 export function Row({
   children,
   style,
@@ -281,7 +301,7 @@ export function Field({ label, children, hint }: { label: string; children: Reac
 }
 
 const styles = StyleSheet.create({
-  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: space.lg },
+  card: { borderWidth: StyleSheet.hairlineWidth, borderRadius: radius.lg, padding: space.lg, shadowColor: '#7a3a1c', shadowOpacity: 0.08, shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 1 },
   button: {
     minHeight: 46,
     borderRadius: radius.pill,

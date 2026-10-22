@@ -64,6 +64,18 @@ Hepsi için tek komut: `make e2e` (sentetik külliyatı üretir, paketleri dış
 Ekran görüntüleri `e2e/out/shots/` altına yazılır. Her betik kendi API'sini (ve gerekirse sahte LLM'ini) başlatıp kapatır.
 Sentetik külliyat ve ölçüm: `cd backend && .venv/bin/python -m evals.run`.
 
+### Marka ve tasarım
+
+Logo (`mobile/assets/brand/folume-mark.svg`, tek renkli sürüm `folume-mark-mono.svg`): kalem ucunun üstünde bir mezuniyet kepi; uç, açık bir kitap gibi açılır.
+Uygulama içinde `mobile/src/ui/Logo.tsx` aynı yolları çizer. Simgeleri yeniden üretmek için (Chromium gerekir):
+
+```bash
+cd e2e && node brand-assets.mjs   # icon, android ön/arka plan/tek renkli, splash, favicon → mobile/assets
+```
+
+Renkler `mobile/src/ui/palette.ts` içindedir (şeftali/teracotta, koyu kahve metin; koyu tema ayrı); `palette.test.ts` metin ve düğme kontrastını (WCAG AA) sınar.
+Başlıklar serif, gövde sistem sans'ıdır (`theme.ts`).
+
 ### Şema ve tip üretimi
 
 Belge modeli tek doğruluk kaynağıdır (`backend/src/folume/model.py`). Değiştirince:

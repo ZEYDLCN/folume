@@ -11,7 +11,7 @@ interface Palette {
 }
 
 const PALETTES: Record<PaperTheme, Palette> = {
-  paper: { bg: '#fbfaf7', fg: '#1c1b19', muted: '#6b675f', accent: '#2457d6', card: '#f1efe9', border: '#dcd8cd' },
+  paper: { bg: '#fcf1e5', fg: '#3e2418', muted: '#7a5a4b', accent: '#c2512f', card: '#f6e3d1', border: '#e8cdb6' },
   sepia: { bg: '#f4ecd8', fg: '#433422', muted: '#7a6a55', accent: '#8a4b12', card: '#ebe0c6', border: '#d6c7a4' },
   dark: { bg: '#17181b', fg: '#d6d6d9', muted: '#8f9096', accent: '#8ab4ff', card: '#222429', border: '#34363c' },
   black: { bg: '#000', fg: '#c9c9cc', muted: '#7d7e83', accent: '#8ab4ff', card: '#121316', border: '#26282d' },
