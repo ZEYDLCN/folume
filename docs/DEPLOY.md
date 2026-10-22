@@ -96,7 +96,7 @@ Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönd
 
 ## Bilmen gerekenler
 
-- **İlk istek yavaş olabilir:** sunucu boş kalınca uyur (Render 15 dk, HF 48 saat); ilk istek onu uyandırır (30 sn – 2 dakika). Uygulama bu sürede “sunucuya ulaşılamadı” der; biraz sonra yeniden dene. Uyutmamak için her gün bir kez `…/v1/health` adresini açan ücretsiz bir zamanlayıcı (ör. cron-job.org) yeter.
+- **İlk istek yavaş olabilir:** sunucu boş kalınca uyur (Render 15 dk, HF 48 saat); ilk istek onu uyandırır (30 sn – 2 dakika). Uygulama bu sürede “sunucuya ulaşılamadı” der; biraz sonra yeniden dene. Uyutmamak için `…/v1/health` adresini düzenli açan ücretsiz bir zamanlayıcı (ör. cron-job.org) yeter: HF için günde bir, Render için 14 dakikada bir (Render'ın ücretsiz saatleri ayda 750 saattir, tek servis için tüm ayı karşılar).
 - **OCR kapalı:** ücretsiz sunucuda OCR imajı büyük ve yavaştır; taranmış PDF'ler “desteklenmiyor” der. Açmak için `FOLUME_OCR=1` ve `pip install ".[ocr]"` gerekir (bkz. DEVELOPMENT.md).
 - **Senkron kapalı** (yukarıya bak). Yedeği uygulamadan al.
 - **Güncelleme:** Render ve Cloudflare dala her push'ta kendiliğinden yeniden derler; HF Space için `publish.sh`'ı yeniden çalıştır.
