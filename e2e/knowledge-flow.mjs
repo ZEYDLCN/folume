@@ -437,6 +437,29 @@ await check('citations export as BibTeX, RIS and CSL-JSON without inventing a ve
   await A.shot('09-data');
 });
 
+await check('notes, review cards and highlights go to Obsidian, Anki and Readwise in the formats those apps import', async () => {
+  const p = A.page;
+  const grab = async (testId) => {
+    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 8000 }), p.getByTestId(testId).click()]);
+    return readFileSync(await dl.path());
+  };
+  const vault = await grab('export-obsidian');
+  assert(vault.subarray(0, 2).toString() === 'PK', 'a ZIP');
+  for (const needle of ['Folume/Index.md', 'Folume/Sparse Routing for Efficient Transformers.md', 'Synced from device A', 'source: "folume"', '## Highlights and notes']) {
+    assert(vault.includes(needle), `the vault has ${needle}`);
+  }
+  assert(vault.includes('[[Learning Compact Representations with Contrastive Pretraining]]'), 'related papers are linked');
+  const anki = (await grab('export-anki')).toString('utf8').split('\n');
+  assert(anki.slice(0, 4).join('|') === '#separator:tab|#html:true|#guid column:1|#tags column:4', anki.slice(0, 4).join('|'));
+  const rows = anki.slice(4).filter(Boolean);
+  assert(rows.length >= 1 && rows.every((r) => r.split('\t').length === 4 && r.startsWith('folume-')), `anki rows: ${rows.join(' // ').slice(0, 300)}`);
+  assert(rows.some((r) => /<i>.*Sparse Routing.*, p\. \d+<\/i>/.test(r)), 'a card names its source');
+  const rw = (await grab('export-readwise')).toString('utf8').split('\r\n');
+  assert(rw[0] === 'Highlight,Title,Author,URL,Note,Location,Date', rw[0]);
+  assert(rw.some((r) => r.includes('Synced from device A')), 'the note is in the highlights');
+  await p.getByTestId('apps-ok').waitFor();
+});
+
 let backupText = '';
 await check('a backup holds notes, cards and tags, and restoring it twice changes nothing', async () => {
   const p = A.page;

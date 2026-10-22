@@ -5,11 +5,12 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { citationSourceOfEntry, toBibtex, toCslJson, toRis } from '@/core/export/citations';
 import { notesToMarkdown } from '@/core/export/markdown';
+import { ankiTsv, obsidianVault, obsidianZip, readwiseCsv, type NotebookPaper } from '@/core/export/notebooks';
 import type { LibraryEntry } from '@/data/library';
 import { createBackup, restoreBackup } from '@/data/backup';
-import { getStores } from '@/services/container';
+import { getKnowledge, getStores } from '@/services/container';
 import { pickTextFile } from '@/services/picker';
-import { shareTextFile } from '@/services/share';
+import { shareBinaryFile, shareTextFile } from '@/services/share';
 import type { StringKey } from '@/i18n';
 import { AppText, Button, Card, IconButton } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
@@ -23,6 +24,7 @@ export default function DataScreen() {
   const router = useRouter();
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [message, setMessage] = useState<Message>(null);
+  const [appsMessage, setAppsMessage] = useState<Message>(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,6 +38,36 @@ export default function DataScreen() {
   const exportNotes = async () => {
     const { annotations, library } = getStores();
     await shareTextFile('folume-notes.md', notesToMarkdown(await library.list(), await annotations.listAll()));
+  };
+
+  const exportApp = async (kind: 'obsidian' | 'anki' | 'readwise') => {
+    setAppsMessage(null);
+    const { annotations, cards, library } = getStores();
+    const [list, notes, allCards] = await Promise.all([library.list(), annotations.listAll(), cards.listAll()]);
+    if (!notes.length && !allCards.length) return setAppsMessage({ tone: 'error', text: t('data.apps.nothing') });
+    let file: string;
+    if (kind === 'anki') {
+      file = `folume-anki-${stamp}.txt`;
+      await shareTextFile(file, ankiTsv(allCards, list), 'text/plain');
+    } else if (kind === 'readwise') {
+      file = `folume-readwise-${stamp}.csv`;
+      await shareTextFile(file, readwiseCsv(list, notes), 'text/csv');
+    } else {
+      const titles = new Map(list.map((e) => [e.id, e.title]));
+      const papers: NotebookPaper[] = await Promise.all(
+        list
+          .filter((e) => notes.some((a) => a.docId === e.id) || allCards.some((c) => c.docId === e.id))
+          .map(async (e) => ({
+            entry: e,
+            annotations: notes.filter((a) => a.docId === e.id),
+            cards: allCards.filter((c) => c.docId === e.id),
+            related: (await getKnowledge().related(e.id)).slice(0, 6).map((r) => ({ title: titles.get(r.b) ?? '', terms: r.shared.slice(0, 5).map((s) => s.term) })).filter((r) => r.title),
+          })),
+      );
+      file = `folume-obsidian-${stamp}.zip`;
+      await shareBinaryFile(file, obsidianZip(obsidianVault(papers)), 'application/zip');
+    }
+    setAppsMessage({ tone: 'ok', text: t('data.apps.done', { file }) });
   };
 
   const backup = async () => {
@@ -78,6 +110,19 @@ export default function DataScreen() {
           <AppText variant="heading">{t('data.notes')}</AppText>
           <AppText muted>{t('data.notes.body')}</AppText>
           <Button label={t('data.notes.export')} variant="secondary" icon="share-outline" onPress={() => void exportNotes()} testID="export-notes-md" />
+        </Card>
+
+        <Card style={{ gap: space.md }}>
+          <AppText variant="heading">{t('data.apps')}</AppText>
+          <AppText muted>{t('data.apps.body')}</AppText>
+          <Button label={t('data.apps.obsidian')} variant="secondary" icon="folder-open-outline" onPress={() => void exportApp('obsidian')} testID="export-obsidian" />
+          <Button label={t('data.apps.anki')} variant="secondary" icon="albums-outline" onPress={() => void exportApp('anki')} testID="export-anki" />
+          <Button label={t('data.apps.readwise')} variant="secondary" icon="color-wand-outline" onPress={() => void exportApp('readwise')} testID="export-readwise" />
+          {appsMessage ? (
+            <AppText color={appsMessage.tone === 'ok' ? c.ok : c.danger} testID={appsMessage.tone === 'ok' ? 'apps-ok' : 'apps-error'}>
+              {appsMessage.text}
+            </AppText>
+          ) : null}
         </Card>
 
         <Card style={{ gap: space.md }}>

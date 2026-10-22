@@ -627,4 +627,12 @@ export const en: Record<StringKey, string> = {
   'ask.aiOff': 'AI answers are switched off, so these are the passages that match your question, with their papers.',
   'ask.empty': 'Your library is empty. Import a paper to ask about it.',
   'ask.again': 'Ask another question',
+
+  'data.apps': 'To other apps',
+  'data.apps.body': 'Take your highlights, notes and review cards to the tools you already use. What the authors wrote stays apart from what you or an AI wrote.',
+  'data.apps.obsidian': 'Obsidian vault (ZIP)',
+  'data.apps.anki': 'Anki cards',
+  'data.apps.readwise': 'Readwise highlights (CSV)',
+  'data.apps.nothing': 'Nothing to export yet.',
+  'data.apps.done': 'Ready: {file}',
 };

@@ -636,6 +636,14 @@ export const tr = {
   'ask.aiOff': 'Yapay zekâ yanıtları kapalı; bu yüzden sorunla eşleşen pasajlar makaleleriyle birlikte gösteriliyor.',
   'ask.empty': 'Kütüphane boş. Sormak için önce bir makale içe aktar.',
   'ask.again': 'Başka bir soru sor',
+
+  'data.apps': 'Başka uygulamalara',
+  'data.apps.body': 'Vurgularını, notlarını ve tekrar kartlarını zaten kullandığın araçlara götür. Yazarların sözleri ile senin ya da yapay zekânın sözleri ayrı kalır.',
+  'data.apps.obsidian': 'Obsidian kasası (ZIP)',
+  'data.apps.anki': 'Anki kartları',
+  'data.apps.readwise': 'Readwise vurguları (CSV)',
+  'data.apps.nothing': 'Henüz dışa aktarılacak bir şey yok.',
+  'data.apps.done': 'Hazır: {file}',
 } as const;
 
 export type StringKey = keyof typeof tr;
