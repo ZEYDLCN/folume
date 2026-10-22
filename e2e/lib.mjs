@@ -14,7 +14,7 @@ export const STRINGS = {
   bookmark: 'Yer imi', close: 'Kapat', equation: 'Denklem', figure: 'Şekil', loading: 'Yükleniyor…',
   empty_unsupported: 'Bu PDF taranmış görünüyor.', footnote: 'Dipnot', original_pages: 'Orijinal sayfalar',
   figure_text: 'Şekil içindeki yazı', table_text: 'Tablo metni',
-  back: 'Geri', go_to: 'Oraya git', open_doi: "DOI'yi aç", add_to_library: 'Kütüphaneye ekle', defined_on: 'Sayfa {n}’de tanımlanıyor', go_to_definition: 'Tanıma git',
+  back: 'Geri', go_to: 'Oraya git', open_doi: "DOI'yi aç", add_to_library: 'Kütüphaneye ekle', add_to_list: 'Okuma listesi', defined_on: 'Sayfa {n}’de tanımlanıyor', go_to_definition: 'Tanıma git',
 };
 
 export const SETTINGS = {

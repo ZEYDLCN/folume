@@ -77,6 +77,7 @@ export interface ReaderStrings {
   go_to: string;
   open_doi: string;
   add_to_library: string;
+  add_to_list: string;
   /** "Defined on page {n}" */
   defined_on: string;
   go_to_definition: string;
@@ -183,6 +184,8 @@ export type ReaderEvent =
   | { type: 'ink-changed'; page: number; strokes: InkStroke[] }
   /** the reader asks to add a paper from the reference list to the library */
   | { type: 'import-ref'; doi: string | null; url: string | null; title: string | null }
+  /** the reader asks to put a paper from the reference list on the reading list */
+  | { type: 'want-ref'; doi: string | null; url: string | null; title: string; year: number | null; authors: string[] }
   | { type: 'mode-changed'; mode: ReaderMode; blockId: string | null }
   | { type: 'log'; level: 'error' | 'warn' | 'info'; message: string };
 

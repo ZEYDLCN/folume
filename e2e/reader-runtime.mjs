@@ -324,6 +324,10 @@ await check('a reference offers its DOI and adding it to the library', async () 
   const events = await r.events();
   assert(events.some((e) => e.type === 'link' && e.url === 'https://doi.org/10.1000/abc123'), 'link event');
   assert(events.some((e) => e.type === 'import-ref' && e.doi === '10.1000/abc123'), 'import-ref event');
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: 'Okuma listesi' }).click();
+  const listed = (await r.events()).find((e) => e.type === 'want-ref');
+  assert(listed && listed.doi === '10.1000/abc123' && listed.title.length > 5, JSON.stringify(listed));
   await r.close();
 });
 

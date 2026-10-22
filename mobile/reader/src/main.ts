@@ -534,6 +534,13 @@ function showCitation(refIds: string[]): void {
   if (info && (info.doi || info.url)) {
     buttons.push([strings.add_to_library, () => { closeSheet(); post({ type: 'import-ref', doi: info.doi, url: info.url, title: info.title }); }]);
   }
+  if (info) {
+    const b = state.byId.get(first);
+    buttons.push([strings.add_to_list, () => {
+      closeSheet();
+      post({ type: 'want-ref', doi: info.doi, url: info.url, title: info.title ?? (b?.text ?? '').slice(0, 240), year: info.year, authors: info.first_author ? [info.first_author] : [] });
+    }]);
+  }
   buttons.push([strings.close, closeSheet]);
   sheetWith(...items, sheetActions(buttons));
 }

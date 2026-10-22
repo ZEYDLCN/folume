@@ -11,6 +11,7 @@ import { TagsSheet } from '@/features/library/TagsSheet';
 import { ImportOverlay } from '@/features/library/ImportOverlay';
 import type { LibraryEntry } from '@/data/library';
 import { getKnowledge, getStores } from '@/services/container';
+import { sameWanted } from '@/data/userdata';
 import { pickPdf } from '@/services/picker';
 import type { PdfSource } from '@/services/importer';
 import { useImport } from '@/services/useImport';
@@ -32,6 +33,7 @@ export default function LibraryScreen() {
   const [linkInitial, setLinkInitial] = useState('');
   const params = useLocalSearchParams<{ import?: string }>();
   const [due, setDue] = useState(0);
+  const [wanted, setWanted] = useState(0);
   const lastSource = useRef<PdfSource | null>(null);
 
   // a link, DOI or arXiv id handed over by a reference list, a shared link or the browser extension
@@ -47,6 +49,7 @@ export default function LibraryScreen() {
     const stores = getStores();
     setEntries(await stores.library.list());
     setDue((await stores.cards.stats()).due);
+    setWanted((await stores.want.list()).filter((w) => w.state === 'todo').length);
   }, []);
   useFocusEffect(
     useCallback(() => {
@@ -57,6 +60,11 @@ export default function LibraryScreen() {
   const imp = useImport(
     useCallback(
       (entry: LibraryEntry) => {
+        // a paper from the reading list that has now been added counts as read-in-progress: take it off the list
+        void getStores().want.list().then(async (list) => {
+          for (const w of list) if (w.state === 'todo' && sameWanted(w, { doi: entry.doi, arxivId: entry.arxivId ?? null, url: null, title: entry.title })) await getStores().want.setState(w.id, 'done');
+          void refresh();
+        });
         void refresh();
         router.push(`/reader/${entry.id}`);
       },
@@ -128,6 +136,14 @@ export default function LibraryScreen() {
               {due > 0 ? (
                 <View pointerEvents="none" style={{ position: 'absolute', top: 2, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }} accessibilityLabel={t('library.reviewDue', { n: due })} testID="review-badge">
                   <AppText variant="caption" color="#fff" style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>{due > 99 ? '99+' : due}</AppText>
+                </View>
+              ) : null}
+            </View>
+            <View>
+              <IconButton icon="bookmarks-outline" label={t('library.wantOpen')} onPress={() => router.push('/want')} testID="open-want" color={c.brandText} />
+              {wanted > 0 ? (
+                <View pointerEvents="none" style={{ position: 'absolute', top: 2, right: 0, minWidth: 18, height: 18, borderRadius: 9, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4 }} testID="want-badge">
+                  <AppText variant="caption" color="#fff" style={{ fontSize: 11, lineHeight: 14, fontWeight: '700' }}>{wanted > 99 ? '99+' : wanted}</AppText>
                 </View>
               ) : null}
             </View>

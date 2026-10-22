@@ -40,6 +40,7 @@ import type { HighlightView } from '@/reader/protocol';
 import { ReaderView, type ReaderViewHandle } from '@/reader/ReaderView';
 import { readerStrings } from '@/reader/strings';
 import { getKnowledge, getStores } from '@/services/container';
+import { translate } from '@/i18n';
 import { useSettings, useLocale } from '@/state/settings';
 import { AppText, Button, IconButton, ProgressBar, Segmented, Sheet, type IconName } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
@@ -85,6 +86,7 @@ export default function ReaderScreen() {
   const [focusMode, setFocusMode] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const speaker = useRef<Speaker | null>(null);
   const anchorRef = useRef<string | null>(null);
   const [listen, setListen] = useState<{ state: SpeakerState; index: number; length: number } | null>(null);
@@ -281,8 +283,14 @@ export default function ReaderScreen() {
           setInkPages((list) => [...list.filter((p) => p.page !== e.page), { page: e.page, strokes: e.strokes }]);
           void getStores().ink.setPage(id, e.page, e.strokes);
           break;
+        case 'want-ref':
+          void getStores().want.add([{ title: e.title, doi: e.doi, url: e.url, year: e.year, authors: e.authors, source: 'ref' }]).then((res) => {
+            setNotice(translate(res.added ? 'reader.notice.listed' : 'reader.notice.listedAlready'));
+            setTimeout(() => setNotice(null), 2200);
+          });
+          break;
         case 'import-ref':
-          router.push({ pathname: '/', params: { import: e.doi ?? e.url ?? e.title ?? '' } });
+          router.dismissTo({ pathname: '/', params: { import: e.doi ?? e.url ?? e.title ?? '' } });
           break;
         case 'link': {
           const url = safeExternalUrl(e.url);
@@ -457,6 +465,15 @@ export default function ReaderScreen() {
           />
         ) : null}
       </View>
+      {notice ? (
+        <View pointerEvents="none" style={{ position: 'absolute', left: 0, right: 0, bottom: 90, alignItems: 'center' }}>
+          <View testID="reader-notice" style={{ backgroundColor: c.ink, borderRadius: 999, paddingHorizontal: 16, paddingVertical: 10 }}>
+            <AppText color="#fff" variant="caption">
+              {notice}
+            </AppText>
+          </View>
+        </View>
+      ) : null}
       {listen ? (
         <ListenBar
           state={listen.state}

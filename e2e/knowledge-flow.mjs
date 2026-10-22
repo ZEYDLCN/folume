@@ -1,7 +1,7 @@
 // Knowledge workspace in Chromium: two "devices" (separate browser contexts) against one real API with sync on.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { assert, check, done, here, launch, shots } from './lib.mjs';
@@ -146,6 +146,45 @@ await check('tags label papers and filter the library', async () => {
   assert((await p.getByTestId(`paper-${companion}`).count()) === 0, 'other paper filtered out');
   await p.getByTestId('filter-all').click();
   await p.getByTestId(`paper-${companion}`).waitFor();
+});
+
+await check('the reading list takes a Zotero-style bibliography file, a DOI by hand, and hands a paper to "add from a link"', async () => {
+  const p = A.page;
+  await p.getByTestId('open-want').click();
+  await p.getByTestId('want-empty').waitFor();
+  const bib = path.join(tmp, 'library.bib');
+  writeFileSync(bib, `@article{a, title={Attention Is {All} You Need}, author={Vaswani, Ashish and Shazeer, Noam}, year={2017}, doi={10.48550/arXiv.1706.03762}, eprint={1706.03762}}
+@inproceedings{b, title={{BERT}: Pre-training of Deep Bidirectional Transformers}, author={Devlin, Jacob}, year=2019, url={https://arxiv.org/abs/1810.04805}}
+@book{c, title={The Art of Computer Programming}, author={Knuth, Donald E.}, year={1968}}
+`);
+  const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.getByTestId('want-import-file').click()]);
+  await chooser.setFiles(bib);
+  await p.getByTestId('want-message-ok').waitFor();
+  assert(/Added 3 papers; 0 were already/.test(await p.getByTestId('want-message-ok').textContent()), await p.getByTestId('want-message-ok').textContent());
+  await p.getByText('Attention Is All You Need').waitFor();
+  assert((await p.getByText('Ashish Vaswani').count()) >= 1, 'authors are written First Last');
+  // the same file again adds nothing
+  const [again] = await Promise.all([p.waitForEvent('filechooser'), p.getByTestId('want-import-file').click()]);
+  await again.setFiles(bib);
+  await p.waitForFunction(() => /Added 0 papers; 3 were already/.test(document.querySelector('[data-testid=want-message-ok]')?.textContent ?? ''));
+  // a DOI by hand
+  await p.getByTestId('want-input').fill('10.1145/3292500.3330701');
+  await p.getByTestId('want-add').click();
+  await p.getByText('doi:10.1145/3292500.3330701').first().waitFor();
+  await A.shot('02c-reading-list');
+  // hand a paper over: the library opens the link dialog with its arXiv id filled in
+  const bert = p.locator('[data-testid^=want-w]').filter({ hasText: 'BERT' }).first();
+  await bert.locator('[data-testid^=want-import-]').click();
+  await p.getByTestId('link-sheet').waitFor();
+  assert((await p.getByTestId('link-input').inputValue()) === '1810.04805', await p.getByTestId('link-input').inputValue());
+  assert(/arXiv 1810\.04805/.test(await p.getByTestId('link-kind').textContent()), 'recognised as arXiv');
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId('open-want').click();
+  // reading it can be ticked off
+  await p.locator('[data-testid^=want-done-]').first().click();
+  await p.getByText(/Already read \(1\)/).waitFor();
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('want-badge').waitFor();
 });
 
 await check('search finds text across papers and opens the paper at that block', async () => {
