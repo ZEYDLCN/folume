@@ -1,0 +1,27 @@
+# Render Blueprint: the Folume API on Render's free web service (a Docker service built from backend/Dockerfile).
+# Dashboard → New → Blueprint → pick this repository. See docs/DEPLOY.md.
+services:
+  - type: web
+    name: folume-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./backend/Dockerfile
+    dockerContext: ./backend
+    healthCheckPath: /v1/health
+    envVars:
+      - key: PORT
+        value: "8000"
+      # the free instance has 512 MB: one conversion at a time, and papers beyond about 40 pages are refused
+      # instead of taking the instance down (a 30-page paper peaks near 410 MB)
+      - key: FOLUME_WORKERS
+        value: "1"
+      - key: FOLUME_MAX_QUEUED_JOBS
+        value: "4"
+      - key: FOLUME_MAX_PAGES
+        value: "40"
+      # the address of the web app, e.g. https://folume.pages.dev (set it in the dashboard after the app is deployed)
+      - key: FOLUME_CORS_ORIGINS
+        sync: false
+      # Render invents a long random key; read it in the dashboard and type it into the app's Settings once
+      - key: FOLUME_API_KEY
+        generateValue: true

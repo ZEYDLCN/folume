@@ -4,24 +4,50 @@
 
 | Parça | Nerede | Ücretsiz sınır |
 |---|---|---|
-| **Sunucu** (PDF → belge, bağlantıdan ekleme, arXiv takibi, isteğe bağlı AI) | Hugging Face **Space** (Docker) | 2 vCPU, 16 GB bellek; 48 saat kimse girmezse uyur; **kalıcı disk yok** |
+| **Sunucu** (PDF → belge, bağlantıdan ekleme, arXiv takibi, isteğe bağlı AI) | Hugging Face Space (Gradio türü) ya da **Render** | Render: 512 MB, 15 dk boş kalınca uyur; HF: uyur, **kalıcı disk yok** |
 | **Uygulama** (web, kurulabilir PWA) | Cloudflare **Pages** | Sınırsız bant genişliği, ayda 500 derleme |
 
 Sunucu hiçbir şey saklamaz (PDF bellekte dönüştürülür, sonuç indirilince silinir); makaleler, notlar ve kartlar **kullanıcının tarayıcısında** durur. Bu yüzden kalıcı diske ihtiyaç yoktur. Cihazlar arası senkron kapalı kalmalıdır (kayıtlar sunucu yeniden başlayınca silinir); yedek için uygulamadaki **Veri → Yedek** kullanılır.
 
-## 1. Sunucu: Hugging Face Space
+## 1. Sunucu
 
-1. <https://huggingface.co/join> ile hesap aç (e-posta yeterli).
-2. <https://huggingface.co/new-space> → **Space name** `folume-api`, **SDK: Docker** (boş şablon), **Hardware: CPU basic · Free**, **Public**. Oluştur.
-3. <https://huggingface.co/settings/tokens> → **Create new token** → türü **Write**. Token'ı kopyala (bir kez görünür).
-4. Bilgisayarında bu deponun kökünde:
+Hugging Face artık **Docker Space'ini yeni hesaplarda ücretli** gösteriyor ([forum](https://discuss.huggingface.co/t/docker-sdk-now-marked-as-paid-when-creating-a-new-space/177580)); Gradio'da da CPU Basic çoğu zaman PRO istiyor. Üç yol var, sırayla dene:
+
+### 1-A. Hugging Face, Gradio türü Space (hesabın uygunsa; denemesi bedava)
+
+Gradio'nun yalnızca “kılıf” olduğu bir Space: `app.py` bizim API'yi başlatır, Gradio sayfası yoktur. Ücretsiz donanım olarak yalnızca **ZeroGPU** sunulabilir; bu hesabın 30 günden eski ve e-postasının doğrulanmış olmasını ister. Olmazsa 1-B'ye geç.
+
+1. <https://huggingface.co/join> ile hesap aç, e-postanı doğrula.
+2. <https://huggingface.co/new-space> → **Space name** `folume-api`, **SDK: Gradio → Blank**, donanım: **CPU Basic** seçilebiliyorsa onu, değilse **ZeroGPU**; **Public**. Oluştur.
+3. <https://huggingface.co/settings/tokens> → **Create new token** → **Write**. Token'ı kopyala.
+4. Bu deponun kökünde:
 
    ```bash
-   deploy/huggingface/publish.sh <kullanıcı-adın>/folume-api
+   deploy/huggingface/publish.sh <kullanıcı-adın>/folume-api gradio
    ```
 
-   Git kullanıcı adı olarak Hugging Face kullanıcı adını, parola olarak **token'ı** ister. Betik yalnızca sunucu dosyalarını (`pyproject.toml`, `src/`, `Dockerfile`, `README.md`) gönderir; deponun geçmişini göndermez.
-5. Space sayfasında **Building** → birkaç dakika sonra **Running**. Şunu aç: `https://<kullanıcı-adın>-folume-api.hf.space/v1/health` → `{"status":"ok",…}` görmelisin.
+   Git kullanıcı adı olarak HF kullanıcı adını, parola olarak **token'ı** ister. Yalnızca sunucu dosyaları gönderilir.
+5. Space **Running** olunca `https://<kullanıcı-adın>-folume-api.hf.space/v1/health` → `{"status":"ok",…}`.
+
+Ayarlar (Space → **Settings → Variables and secrets**): `FOLUME_CORS_ORIGINS` (Variable) ve `FOLUME_API_KEY` (**Secret**), bkz. 3. adım. 48 saat kullanılmazsa uyur; kalıcı disk yoktur.
+
+### 1-B. Render (kart istemez; en sağlam ücretsiz yol)
+
+Render'ın ücretsiz web servisi: 512 MB bellek, paylaşımlı işlemci, 15 dakika boş kalınca uyur (uyanması 30–50 sn). **Ölçüm:** boşta sunucu ≈ 95 MB; 3 sayfalık makale ≈ 285 MB; 30 sayfalık makale ≈ 410 MB tepe (12 sn). Bu yüzden `render.yaml` aynı anda tek dönüşüm ve en çok 40 sayfa ayarlar; daha uzun makale, instance'ı düşürmek yerine açık bir hatayla reddedilir.
+
+1. <https://render.com> ile hesap aç (GitHub ile giriş en kolayı), GitHub deposuna erişim ver.
+2. **New → Blueprint** → `folume` deposunu seç → Render `render.yaml`'ı okur → **Apply**. (Blueprint çıkmazsa **New → Web Service → Docker** ile elle: *Dockerfile path* `backend/Dockerfile`, *Docker build context* `backend`, *Instance type* Free, ortam değişkenleri `render.yaml`'daki gibi.)
+3. İlk derleme birkaç dakika sürer. Bitince adres `https://folume-api-xxxx.onrender.com` olur; `/v1/health` adresini aç.
+4. **Environment** sekmesinde `FOLUME_API_KEY`'in değerini oku (Render üretmiştir); 4. adımda uygulamaya yazacaksın. `FOLUME_CORS_ORIGINS`'i 3. adımda dolduracaksın.
+
+### 1-C. Kendi bilgisayarın (tamamen bedava, ama yalnızca açıkken)
+
+```bash
+make setup-backend && make dev-api            # http://localhost:8000
+cloudflared tunnel --url http://localhost:8000 # herkese açık geçici bir https adresi verir
+```
+
+Bilgisayarın açık olduğu sürece çalışır; adres her başlatışta değişir. Kendin ve birkaç kişi için yeter.
 
 ## 2. Uygulama: Cloudflare Pages
 
@@ -35,19 +61,19 @@ Sunucu hiçbir şey saklamaz (PDF bellekte dönüştürülür, sonuç indirilinc
    - **Environment variables:**
      - `NODE_VERSION` = `22`
      - `CI` = `1`
-     - `EXPO_PUBLIC_API_URL` = `https://<kullanıcı-adın>-folume-api.hf.space` (sunucunun adresi, sonunda `/` olmadan)
+     - `EXPO_PUBLIC_API_URL` = sunucunun adresi (`https://<kullanıcı-adın>-folume-api.hf.space` ya da `https://folume-api-xxxx.onrender.com`; sonunda `/` olmadan)
 4. **Save and Deploy**. Bitince adres `https://<proje-adı>.pages.dev` olur.
 
 ## 3. İkisini birbirine tanıt (CORS ve anahtar)
 
-Space sayfasında **Settings → Variables and secrets**:
+Sunucu panelinde (HF: Space → **Settings → Variables and secrets**; Render: servis → **Environment**):
 
 | Ad | Tür | Değer |
 |---|---|---|
 | `FOLUME_CORS_ORIGINS` | Variable | `https://<proje-adı>.pages.dev` (uygulamanın adresi) |
-| `FOLUME_API_KEY` | **Secret** | Uzun rastgele bir parola. Tanımlıysa her istek bunu ister; internetteki herkesin senin işlemcini kullanmasını engeller |
+| `FOLUME_API_KEY` | **Secret** | Uzun rastgele bir parola (Render'da zaten üretilmiştir). Tanımlıysa her istek bunu ister; internetteki herkesin senin işlemcini kullanmasını engeller |
 
-Değişken ekleyince Space kendiliğinden yeniden başlar.
+Değişken ekleyince sunucu kendiliğinden yeniden başlar.
 
 ## 4. Dene
 
@@ -70,8 +96,8 @@ Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönd
 
 ## Bilmen gerekenler
 
-- **İlk istek yavaş olabilir:** Space 48 saat kullanılmazsa uyur; ilk istek onu uyandırır (1–2 dakika). Uygulama bu sürede “sunucuya ulaşılamadı” der; biraz sonra yeniden dene. Uyutmamak için her gün bir kez `…/v1/health` adresini açan ücretsiz bir zamanlayıcı (ör. cron-job.org) yeter.
-- **OCR kapalı:** ücretsiz Space'te OCR imajı büyük ve yavaştır; taranmış PDF'ler “desteklenmiyor” der. Açmak için `FOLUME_OCR=1` ve `pip install ".[ocr]"` gerekir (bkz. DEVELOPMENT.md).
+- **İlk istek yavaş olabilir:** sunucu boş kalınca uyur (Render 15 dk, HF 48 saat); ilk istek onu uyandırır (30 sn – 2 dakika). Uygulama bu sürede “sunucuya ulaşılamadı” der; biraz sonra yeniden dene. Uyutmamak için her gün bir kez `…/v1/health` adresini açan ücretsiz bir zamanlayıcı (ör. cron-job.org) yeter.
+- **OCR kapalı:** ücretsiz sunucuda OCR imajı büyük ve yavaştır; taranmış PDF'ler “desteklenmiyor” der. Açmak için `FOLUME_OCR=1` ve `pip install ".[ocr]"` gerekir (bkz. DEVELOPMENT.md).
 - **Senkron kapalı** (yukarıya bak). Yedeği uygulamadan al.
-- **Güncelleme:** kodu değiştirince sunucu için `publish.sh`'ı yeniden çalıştır; uygulama için dala push etmen yeter (Cloudflare kendiliğinden derler).
+- **Güncelleme:** Render ve Cloudflare dala her push'ta kendiliğinden yeniden derler; HF Space için `publish.sh`'ı yeniden çalıştır.
 - **Kendi alan adın** varsa Cloudflare Pages'te **Custom domains** ekler; `FOLUME_CORS_ORIGINS`'i yeni adrese göre güncellemeyi unutma (birden çok adres virgülle ayrılır).
