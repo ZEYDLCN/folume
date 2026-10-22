@@ -1,19 +1,23 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 
+import { annotatedPdf } from '@/core/export/annotatedPdf';
+import { titleOf } from '@/core/docModel';
 import type { Document } from '@/core/types';
 import {
-  EN_EXPORT_STRINGS, TR_EXPORT_STRINGS, exportPaper, type PaperFormat, type PaperLayout, type PaperTheme,
+  EN_EXPORT_STRINGS, TR_EXPORT_STRINGS, exportPaper, slugify, type PaperFormat, type PaperLayout, type PaperTheme,
 } from '@/core/export/paper';
 import type { LibraryRepo } from '@/data/library';
 import type { ReaderSettings } from '@/reader/protocol';
+import { getStores } from '@/services/container';
 import { shareBinaryFile } from '@/services/share';
 import { AppSwitch, AppText, Button, Field, Row, Segmented, Sheet } from '@/ui/components';
 import { space } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 import { getLocale } from '@/i18n';
 
-const FORMATS: PaperFormat[] = ['epub', 'html', 'markdown', 'text', 'xlsx'];
+type Choice = PaperFormat | 'pdf';
+const FORMATS: Choice[] = ['epub', 'html', 'markdown', 'text', 'xlsx', 'pdf'];
 
 /** Turns the open paper into an EPUB, a web page, Markdown or plain text, on the device, and shares the file. */
 export function ExportSheet({
@@ -32,7 +36,7 @@ export function ExportSheet({
   settings: ReaderSettings;
 }) {
   const t = useT();
-  const [format, setFormat] = useState<PaperFormat>('epub');
+  const [format, setFormat] = useState<Choice>('epub');
   const [layout, setLayout] = useState<PaperLayout | null>(null);
   const [theme, setTheme] = useState<PaperTheme | null>(null);
   const [images, setImages] = useState(true);
@@ -41,19 +45,41 @@ export function ExportSheet({
   const [result, setResult] = useState<{ file: string; detail: string } | null>(null);
   const [failed, setFailed] = useState(false);
   const [noTables, setNoTables] = useState(false);
+  const [noPages, setNoPages] = useState(false);
+  const [skipped, setSkipped] = useState(0);
 
   const pickedLayout = layout ?? settings.layout;
   const pickedTheme = theme ?? settings.theme;
   const styled = format === 'epub' || format === 'html';
+  const simple = format === 'text' || format === 'xlsx' || format === 'pdf';
 
   const run = async () => {
     setBusy(true);
     setFailed(false);
     setResult(null);
+    setNoTables(false);
+    setNoPages(false);
+    setSkipped(0);
     try {
+      if (format === 'pdf') {
+        const { annotations, ink } = getStores();
+        const [marks, strokes] = await Promise.all([annotations.list(docId), ink.list(docId)]);
+        const pageImages = new Map<number, Uint8Array>();
+        for (const page of doc.pages) {
+          if (!/\.jpe?g$/i.test(page.image)) continue;
+          const bytes = await library.asset(docId, page.image);
+          if (bytes) pageImages.set(page.number, bytes);
+        }
+        const made = annotatedPdf({ doc, pageImages, annotations: marks, ink: strokes });
+        const file = `${slugify(titleOf(doc))}-annotated.pdf`;
+        await shareBinaryFile(file, made.bytes, 'application/pdf');
+        setSkipped(made.summary.skipped);
+        setResult({ file, detail: t('export.pdf.detail', { pages: made.summary.pages, highlights: made.summary.highlights, notes: made.summary.notes, strokes: made.summary.strokes }) });
+        return;
+      }
       const out = await exportPaper(
         doc,
-        format,
+        format as PaperFormat,
         {
           layout: pickedLayout,
           theme: pickedTheme,
@@ -72,6 +98,7 @@ export function ExportSheet({
     } catch (e) {
       setFailed(true);
       setNoTables(e instanceof Error && e.message === 'no_tables');
+      setNoPages(e instanceof Error && e.message === 'no_page_images');
     } finally {
       setBusy(false);
     }
@@ -82,7 +109,7 @@ export function ExportSheet({
       <View testID="export-sheet" style={{ gap: space.lg }}>
         <AppText muted>{t('export.intro')}</AppText>
         <Field label={t('export.format')} hint={t(`export.hint.${format}`)}>
-          <Segmented<PaperFormat>
+          <Segmented<Choice>
             value={format}
             onChange={setFormat}
             options={FORMATS.map((f) => ({ value: f, label: t(`export.format.${f}`) }))}
@@ -109,7 +136,7 @@ export function ExportSheet({
             />
           </Field>
         ) : null}
-        {format !== 'text' && format !== 'xlsx' ? (
+        {!simple ? (
           <View style={{ gap: 4 }}>
             <Row style={{ justifyContent: 'space-between' }}>
               <AppText style={{ flex: 1 }}>{t('export.images')}</AppText>
@@ -120,7 +147,7 @@ export function ExportSheet({
             </AppText>
           </View>
         ) : null}
-        {format !== 'xlsx' ? (
+        {format !== 'xlsx' && format !== 'pdf' ? (
         <View style={{ gap: 4 }}>
           <Row style={{ justifyContent: 'space-between' }}>
             <AppText style={{ flex: 1 }}>{t('export.appendix')}</AppText>
@@ -144,11 +171,16 @@ export function ExportSheet({
             <AppText variant="caption" muted>
               {result.detail}
             </AppText>
+            {skipped ? (
+              <AppText variant="caption" muted testID="export-skipped">
+                {t('export.pdf.skipped', { n: skipped })}
+              </AppText>
+            ) : null}
           </View>
         ) : null}
         {failed ? (
           <AppText testID="export-error" color="#b45309">
-            {t(noTables ? 'export.noTables' : 'export.error')}
+            {t(noTables ? 'export.noTables' : noPages ? 'export.pdf.noPages' : 'export.error')}
           </AppText>
         ) : null}
       </View>

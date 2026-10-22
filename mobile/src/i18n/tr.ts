@@ -644,6 +644,12 @@ export const tr = {
   'data.apps.readwise': 'Readwise vurguları (CSV)',
   'data.apps.nothing': 'Henüz dışa aktarılacak bir şey yok.',
   'data.apps.done': 'Hazır: {file}',
+
+  'export.format.pdf': 'İşaretli PDF',
+  'export.hint.pdf': 'Sayfalar orijinaldeki gibi; üstünde vurguların, notların ve kalem çizimlerin var, bölümler yer imi olarak eklenir. Vurgu konumları yaklaşıktır. Okumak ve işaretlemek içindir; metin araması için değil.',
+  'export.pdf.detail': '{pages} sayfa · {highlights} vurgu · {notes} not · {strokes} çizgi',
+  'export.pdf.skipped': '{n} işaret, ilgili bölüm artık makalede olmadığı için eklenmedi.',
+  'export.pdf.noPages': 'Bu makalenin sayfa görselleri bu cihazda yok; PDF oluşturulamadı.',
 } as const;
 
 export type StringKey = keyof typeof tr;

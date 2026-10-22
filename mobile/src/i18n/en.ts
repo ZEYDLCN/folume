@@ -635,4 +635,10 @@ export const en: Record<StringKey, string> = {
   'data.apps.readwise': 'Readwise highlights (CSV)',
   'data.apps.nothing': 'Nothing to export yet.',
   'data.apps.done': 'Ready: {file}',
+
+  'export.format.pdf': 'Annotated PDF',
+  'export.hint.pdf': 'The pages as in the original, with your highlights, notes and pencil drawings on top, and the sections as bookmarks. Highlight positions are approximate. For reading and marking up, not for searching.',
+  'export.pdf.detail': '{pages} pages · {highlights} highlights · {notes} notes · {strokes} strokes',
+  'export.pdf.skipped': '{n} marks were left out because their place is no longer in the paper.',
+  'export.pdf.noPages': 'The page pictures of this paper are not on this device, so no PDF could be made.',
 };
