@@ -1,0 +1,13 @@
+# Cloudflare Pages: headers for the static web app
+
+/*
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+
+# the service worker and the manifest must always be fresh; the hashed bundle under /_expo can be cached for good
+/sw.js
+  Cache-Control: no-cache
+/manifest.webmanifest
+  Cache-Control: no-cache
+/_expo/static/*
+  Cache-Control: public, max-age=31536000, immutable

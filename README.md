@@ -221,7 +221,7 @@ cd mobile && npm run web                  # uygulama (tarayıcıda)
 make check                                # tüm testler
 ```
 
-- [Geliştirme ve işletme rehberi](docs/DEVELOPMENT.md) · [Mimari](docs/ARCHITECTURE.md) · [Yol haritası ve durum](docs/ROADMAP.md) · [Değerlendirme](docs/EVALUATION.md)
+- [Ücretsiz yayına alma](docs/DEPLOY.md) · [Geliştirme ve işletme rehberi](docs/DEVELOPMENT.md) · [Mimari](docs/ARCHITECTURE.md) · [Yol haritası ve durum](docs/ROADMAP.md) · [Değerlendirme](docs/EVALUATION.md)
 
 ---
 

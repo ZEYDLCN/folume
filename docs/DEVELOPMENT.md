@@ -150,6 +150,8 @@ docs/                   ROADMAP · ARCHITECTURE · EVALUATION · DEVELOPMENT
 
 ## Dağıtım
 
+Ücretsiz, adım adım yayın (Hugging Face Space + Cloudflare Pages) için bkz. [DEPLOY.md](DEPLOY.md). Kendi sunucunda Docker ile:
+
 ```bash
 docker build -t folume-api backend
 docker run -p 8000:8000 -e FOLUME_API_KEY=... -v folume-data:/data folume-api
