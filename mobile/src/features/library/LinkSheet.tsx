@@ -12,17 +12,20 @@ export function LinkSheet({
   visible,
   onClose,
   onSubmit,
+  initial = '',
 }: {
   visible: boolean;
   onClose: () => void;
   onSubmit: (url: string, label: string) => void;
+  /** text to start with, e.g. a DOI picked from a reference list */
+  initial?: string;
 }) {
   const t = useT();
   const c = useColors();
   const [text, setText] = useState('');
   useEffect(() => {
-    if (visible) setText('');
-  }, [visible]);
+    if (visible) setText(initial);
+  }, [visible, initial]);
 
   const info = classifyLink(text);
   const entered = text.trim().length > 0;

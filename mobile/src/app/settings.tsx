@@ -1,16 +1,19 @@
+import type { CitationStyle } from '@/core/quote';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { Alert, Platform } from 'react-native';
-import { ScrollView, Switch, TextInput, View } from 'react-native';
+import { ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { bookmarklet } from '@/core/share';
 import { TypographyControls } from '@/features/reader/TypographyControls';
 import type { LocaleSetting } from '@/i18n';
+import { copyText } from '@/services/clipboard';
 import { getApi } from '@/services/container';
 import { eraseRemote, lastSyncAt, MIN_SYNC_KEY_LENGTH, runSync, syncErrorKey } from '@/services/sync';
 import type { Capabilities } from '@/services/api';
 import { useSettings, type AiPrefs, type AppTheme } from '@/state/settings';
-import { AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
+import { AppSwitch, AppText, Button, Card, Field, IconButton, Segmented } from '@/ui/components';
 import { radius, space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
 
@@ -26,6 +29,7 @@ export default function SettingsScreen() {
   const [url, setUrl] = useState(s.serverUrl);
   const [key, setKey] = useState(s.apiKey);
   const [test, setTest] = useState<Test>({ status: 'idle' });
+  const [copied, setCopied] = useState(false);
   const [syncKey, setSyncKey] = useState(s.syncKey);
   const [syncUi, setSyncUi] = useState<SyncUi>({ status: 'idle' });
   const [last, setLast] = useState<number | null>(null);
@@ -152,6 +156,27 @@ export default function SettingsScreen() {
               ]}
             />
           </Field>
+          <Field label={t('settings.citationStyle')} hint={t('settings.citationStyle.hint')}>
+            <Segmented<CitationStyle>
+              value={s.citationStyle}
+              onChange={(citationStyle) => void s.update({ citationStyle })}
+              options={[
+                { value: 'apa', label: 'APA' },
+                { value: 'mla', label: 'MLA' },
+                { value: 'ieee', label: 'IEEE' },
+              ]}
+            />
+          </Field>
+          <Field label={t('settings.authorName')} hint={t('settings.authorName.hint')}>
+            <TextInput
+              value={s.authorName}
+              onChangeText={(authorName) => void s.update({ authorName })}
+              accessibilityLabel={t('settings.authorName')}
+              testID="author-name"
+              placeholderTextColor={c.muted}
+              style={input}
+            />
+          </Field>
           <Field label={t('settings.theme')}>
             <Segmented<AppTheme>
               value={s.appTheme}
@@ -170,18 +195,18 @@ export default function SettingsScreen() {
           <View style={{ gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <AppText style={{ flex: 1 }}>{t('settings.ai.enable')}</AppText>
-              <Switch value={s.ai.enabled} onValueChange={(enabled) => void s.updateAi({ enabled })} testID="switch-ai" />
+              <AppSwitch value={s.ai.enabled} onValueChange={(enabled) => void s.updateAi({ enabled })} testID="switch-ai" />
             </View>
             <AppText variant="caption" muted>{t('settings.ai.enable.hint')}</AppText>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <AppText style={{ flex: 1 }}>{t('settings.ai.confirm')}</AppText>
-            <Switch value={s.ai.confirmBeforeSend} onValueChange={(confirmBeforeSend) => void s.updateAi({ confirmBeforeSend })} testID="switch-confirm" />
+            <AppSwitch value={s.ai.confirmBeforeSend} onValueChange={(confirmBeforeSend) => void s.updateAi({ confirmBeforeSend })} testID="switch-confirm" />
           </View>
           <View style={{ gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
               <AppText style={{ flex: 1 }}>{t('settings.ai.images')}</AppText>
-              <Switch value={s.ai.shareImages} onValueChange={(shareImages) => void s.updateAi({ shareImages })} testID="switch-images" />
+              <AppSwitch value={s.ai.shareImages} onValueChange={(shareImages) => void s.updateAi({ shareImages })} testID="switch-images" />
             </View>
             <AppText variant="caption" muted>{t('settings.ai.images.hint')}</AppText>
           </View>
@@ -228,7 +253,7 @@ export default function SettingsScreen() {
           <AppText muted>{t('sync.body')}</AppText>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md }}>
             <AppText style={{ flex: 1 }}>{t('sync.enable')}</AppText>
-            <Switch value={s.sync.enabled} onValueChange={(enabled) => void s.updateSync({ enabled })} testID="switch-sync" />
+            <AppSwitch value={s.sync.enabled} onValueChange={(enabled) => void s.updateSync({ enabled })} testID="switch-sync" />
           </View>
           {s.sync.enabled ? (
             <View style={{ gap: space.md }}>
@@ -256,6 +281,38 @@ export default function SettingsScreen() {
               <Button label={t('sync.erase')} variant="ghost" onPress={() => void erase()} disabled={!keyOk} testID="sync-erase" />
             </View>
           ) : null}
+        </Card>
+
+        <Card style={{ gap: space.sm }} testID="send-settings">
+          <AppText variant="heading">{t('send.title')}</AppText>
+          <AppText muted>{t('send.body')}</AppText>
+          {Platform.OS === 'web' ? (
+            <>
+              <AppText variant="caption" muted>
+                {t('send.share')}
+              </AppText>
+              <Button
+                label={copied ? t('send.copied') : t('send.bookmarklet')}
+                variant="secondary"
+                icon="bookmark-outline"
+                onPress={() => {
+                  void copyText(bookmarklet(window.location.origin + window.location.pathname.replace(/\/[^/]*$/, '')));
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                testID="copy-bookmarklet"
+              />
+              <AppText variant="caption" muted>
+                {t('send.bookmarklet.hint')}
+              </AppText>
+            </>
+          ) : null}
+          <AppText variant="caption" muted>
+            {t('send.extension')}
+          </AppText>
+          <AppText variant="caption" muted>
+            {t('send.deeplink')}
+          </AppText>
         </Card>
 
         <Card style={{ gap: space.sm }}>

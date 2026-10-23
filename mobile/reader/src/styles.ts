@@ -1,6 +1,6 @@
 export const CSS = `
 :root{
-  --bg:#fbfaf7;--fg:#1c1b19;--muted:#6b675f;--accent:#2457d6;--card:#f1efe9;--border:#dcd8cd;
+  --bg:#fcf1e5;--fg:#3e2418;--muted:#7a5a4b;--accent:#c2512f;--card:#f6e3d1;--border:#e8cdb6;
   --mark:#ffe58a;--warn:#b45309;--warnbg:#fff4e0;--fs:18px;--lh:1.6;--pad:22px;--k:1.8;
   --font:Georgia,'Times New Roman',serif;--sans:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
 }
@@ -13,6 +13,13 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--fg)}
 body{font-family:var(--font);font-size:var(--fs);line-height:var(--lh);-webkit-text-size-adjust:100%;
   padding-top:env(safe-area-inset-top);padding-bottom:calc(env(safe-area-inset-bottom) + 120px);overflow-wrap:anywhere}
 body.sans{--font:var(--sans)}
+body.ff-hyper{--font:'Atkinson Hyperlegible Next','Atkinson Hyperlegible',var(--sans)}
+body.ff-dys{--font:'OpenDyslexic',var(--sans)}
+body{letter-spacing:var(--ls,0);word-spacing:var(--ws,0)}
+#ruler{position:fixed;inset:0;z-index:20;pointer-events:none}
+#ruler .rb{position:absolute;left:0;right:0;background:color-mix(in srgb,var(--bg) 62%,transparent)}
+#ruler .top{top:0;height:calc(44vh - 1.3em)}
+#ruler .bottom{top:calc(44vh + 1.3em + var(--lh) * 1em);bottom:0}
 body.justify .blk-paragraph,body.justify .li .lt,body.justify .fn,body.justify .ref .rt{text-align:justify;hyphens:auto;-webkit-hyphens:auto}
 #book{max-width:46em;margin:0 auto;padding:10px var(--pad) 40px}
 .blk{position:relative;margin:0 0 .85em;scroll-margin-top:10px;border-radius:4px}
@@ -36,6 +43,8 @@ h2.h{font-size:1.25em}h3.h{font-size:1.1em}h4.h{font-size:1em;font-style:italic}
 .blk[data-label]::before{content:attr(data-label);display:block;font:700 .66em var(--sans);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-bottom:.4em}
 a.cite{color:var(--accent);text-decoration:none;border-radius:3px;padding:0 1px}
 a.link{color:var(--accent)}
+a.xref{color:var(--accent);text-decoration:none;border-bottom:1px dotted var(--accent)}
+abbr.term{text-decoration:none;border-bottom:1px dotted var(--muted);cursor:help}
 .m{font-family:'STIX Two Math','Cambria Math','Times New Roman',serif;font-style:italic}
 code,pre{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82em}
 pre{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:10px 12px;overflow-x:auto;line-height:1.45;white-space:pre}
@@ -83,6 +92,8 @@ body.original #orig{display:block}
 .pg .hl{position:absolute;pointer-events:none;background:rgba(255,190,0,.28);outline:2px solid rgba(240,150,0,.95);border-radius:2px}
 .pg .hover{position:absolute;pointer-events:none;background:rgba(36,87,214,.14);outline:1px solid rgba(36,87,214,.8)}
 .pg.loading{min-height:200px}
+.pg svg.ink{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none}
+#orig.ink-on .pg{touch-action:none;cursor:crosshair;user-select:none;-webkit-user-select:none}
 .zoom{position:fixed;inset:0;z-index:50;background:rgba(0,0,0,.94);overflow:auto;-webkit-overflow-scrolling:touch}
 .zoom img{display:block;max-width:none;background:#fff;margin:56px auto 40px}
 .zoom img.tint{background:transparent;filter:invert(1)}
@@ -91,11 +102,15 @@ body.original #orig{display:block}
 .sheet{position:fixed;left:10px;right:10px;bottom:calc(env(safe-area-inset-bottom) + 12px);z-index:40;background:var(--card);color:var(--fg);
   border:1px solid var(--border);border-radius:14px;padding:12px 14px;box-shadow:0 8px 30px rgba(0,0,0,.28);font:14px/1.45 var(--sans);
   max-height:46vh;overflow:auto}
+.termhead{font-weight:700;font-size:15px;margin-bottom:4px}.termdef{margin:2px 0 6px}.termwhere{color:var(--muted);font-size:12px}
+.xpreview .blk{margin:0}.xpreview .fig,.xpreview .tbl,.xpreview .eq{margin:0}
 .sheet .ref{font-size:13px;margin:0 0 8px}
 .sheet .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
 .sheet button{font:600 13px var(--sans);color:var(--accent);background:transparent;border:0;padding:6px 8px}
+.pill.back{left:14px;right:auto;transform:none;background:var(--card);color:var(--fg);border:1px solid var(--border);z-index:35}
 .pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(env(safe-area-inset-bottom) + 14px);z-index:30;border:0;border-radius:999px;
   padding:10px 16px;font:600 13px var(--sans);color:#fff;background:#1d2433;box-shadow:0 4px 16px rgba(0,0,0,.35)}
+${typeof __FONT_CSS__ === 'string' ? __FONT_CSS__ : ''}
 /* ---------------------------------------------------------------- magazine layout */
 body.l-magazine #book{max-width:64em}
 body.l-magazine .title{column-span:all;font-size:2.3em;font-weight:800;line-height:1.05;letter-spacing:-.025em;margin:.7em 0 .35em}

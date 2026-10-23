@@ -29,6 +29,20 @@ for (let i = 0; i < 60; i++) {
 
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'tr-TR' });
+// headless Chromium has no voices: a stand-in that records what would be said and "finishes" each sentence shortly after
+await context.addInitScript(() => {
+  window.__spoken = [];
+  window.__cancels = 0;
+  window.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  Object.defineProperty(window, 'speechSynthesis', {
+    configurable: true,
+    value: {
+      getVoices: () => [],
+      cancel() { window.__cancels += 1; clearTimeout(window.__speechTimer); },
+      speak(u) { window.__spoken.push({ text: u.text, rate: u.rate, lang: u.lang }); window.__speechTimer = setTimeout(() => u.onend && u.onend(), 300); },
+    },
+  });
+});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -128,6 +142,73 @@ await check('focus mode hides the controls, keeps the position and brings them b
   assert(/dk kaldı|Bitti/.test(await page.getByTestId('reader-position').textContent()), 'time left shown in the header');
 });
 
+await check('listening: the paper is read sentence by sentence, the sentence is marked, and the controls work', async () => {
+  await page.getByTestId('open-more').click();
+  await page.getByTestId('more-listen').click();
+  await page.getByTestId('listen-bar').waitFor();
+  const spoken = () => page.evaluate(() => window.__spoken.map((s) => s.text));
+  await page.waitForFunction(() => window.__spoken.length >= 2, null, { timeout: 8000 });
+  const first = (await spoken())[0];
+  assert(first.length > 5 && !/\[\d+\]/.test(first), `first sentence: ${first}`);
+  assert((await page.evaluate(() => window.__spoken[0].lang)) === 'en-US', 'language of the paper');
+  assert(/Cümle \d+ \/ \d+/.test(await page.getByTestId('listen-count').textContent()), 'counter');
+  await frame().locator('mark.hl[data-h="find:speech"]').first().waitFor({ timeout: 5000 });
+  // pause: nothing more is said
+  await page.getByTestId('listen-toggle').click();
+  await page.waitForTimeout(150);
+  const n = (await spoken()).length;
+  await page.waitForTimeout(400);
+  assert((await spoken()).length === n, 'paused speech must stay silent');
+  // resume repeats the sentence that was interrupted, at the new speed
+  await page.getByTestId('listen-rate').click();
+  assert((await page.getByTestId('listen-rate').textContent()).includes('1.25'), 'speed label');
+  await page.getByTestId('listen-toggle').click();
+  await page.waitForFunction((k) => window.__spoken.length > k, n, { timeout: 5000 }).catch(async (e) => { throw new Error(`${e.message}\nspoken=${JSON.stringify(await page.evaluate(() => [window.__spoken.length, window.__cancels, window.__spoken.slice(-2)]))} n=${n} toggle=${await page.getByTestId('listen-toggle').getAttribute('aria-label')}`); });
+  assert((await page.evaluate(() => window.__spoken[window.__spoken.length - 1].rate)) === 1.25, 'new speed is used');
+  await shot('listen');
+  await page.getByTestId('listen-next').click();
+  await page.getByTestId('listen-close').click();
+  assert((await page.getByTestId('listen-bar').count()) === 0, 'bar closed');
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('mark.hl[data-h="find:speech"]').length === 0);
+  const after = (await spoken()).length;
+  await page.waitForTimeout(300);
+  assert((await spoken()).length === after, 'closing stops the voice');
+});
+
+await check('a block can be corrected by hand, the correction survives a reload, and the converter\'s version comes back on request', async () => {
+  const first = () => frame().locator('#book .blk-paragraph .bt').first();
+  const original = await first().textContent();
+  await first().click();
+  await page.getByTestId('block-actions').waitFor();
+  await page.getByTestId('action-fix').click();
+  await page.getByTestId('fix-sheet').waitFor();
+  assert((await page.getByTestId('fix-text').inputValue()) === original, 'the sheet starts from the current text');
+  await page.getByTestId('fix-text').fill('Corrected by hand: the first paragraph.');
+  await page.getByTestId('fix-save').click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelector('#book .blk-paragraph .bt')?.textContent.includes('Corrected by hand'), null, { timeout: 15000 });
+  await page.reload();
+  await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelector('#book .blk-paragraph .bt')?.textContent.includes('Corrected by hand'), null, { timeout: 15000 });
+  await first().click();
+  await page.getByTestId('action-fix').click();
+  await page.getByTestId('fix-restore').click();
+  await page.waitForFunction((t) => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelector('#book .blk-paragraph .bt')?.textContent === t, original, { timeout: 15000 });
+});
+
+await check('a wrongly converted block can be reported: a small file with the block, its neighbours and the page picture', async () => {
+  await frame().locator('#book .blk-paragraph .bt').first().click();
+  await page.getByTestId('block-actions').waitFor();
+  await page.getByTestId('action-report').click();
+  await page.getByTestId('report-sheet').waitFor();
+  await page.getByTestId('report-note').fill('These two paragraphs are one.');
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 10000 }), page.getByTestId('report-create').click()]);
+  assert(/^folume-feedback-[A-Za-z0-9]{1,8}-b\d+\.zip$/.test(download.suggestedFilename()), download.suggestedFilename());
+  const file = path.join(tmpdir(), `feedback-${Date.now()}.zip`);
+  await download.saveAs(file);
+  const listing = (await import('node:child_process')).spawnSync('python3', ['-c', 'import sys,zipfile,json;z=zipfile.ZipFile(sys.argv[1]);r=json.loads(z.read("report.json"));print(sorted(z.namelist()),r["note"],r["block"]["type"],r["paper"]["schema_version"])', file], { encoding: 'utf8' });
+  assert(/report\.json/.test(listing.stdout) && /page-\d+\.jpg/.test(listing.stdout) && /These two paragraphs are one\./.test(listing.stdout), listing.stdout + listing.stderr);
+});
+
 await check('tapping a block offers original + bookmark; bookmarks survive a reload', async () => {
   await frame().locator('#book .blk-paragraph .bt').first().click();
   await page.getByTestId('block-actions').waitFor();
@@ -135,7 +216,7 @@ await check('tapping a block offers original + bookmark; bookmarks survive a rel
   await page.waitForTimeout(300);
   await page.reload();
   await frame().locator('#book .h').first().waitFor({ timeout: 20000 });
-  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('.blk.bm').length === 1);
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('.blk.bm').length === 1, null, { timeout: 8000 }).catch(async (e) => { throw new Error(`${e.message}\nbm=${await page.evaluate(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('.blk.bm').length)} state=${await page.evaluate(() => JSON.stringify(Object.fromEntries(Object.entries(localStorage).filter(([k]) => /state/.test(k)))))}`); });
   await page.getByTestId('open-contents').click();
   await page.getByText(/Yer imleri \(1\)/).click();
   await shot('07-bookmarks');
@@ -198,6 +279,35 @@ await check('Original view shows the source page and returns to the same place',
   }, null, { timeout: 15000 });
   await page.waitForTimeout(400);
   await shot('09-original');
+  await page.getByRole('button', { name: 'Kitap', exact: true }).click();
+  await page.waitForFunction(() => !document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('original'));
+});
+
+await check('hand-drawn notes on the original pages are saved and come back after a reload', async () => {
+  await page.getByRole('button', { name: 'Orijinal' }).click();
+  await page.getByTestId('ink-bar').waitFor();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('#orig .pg svg.ink').length >= 1);
+  await frame().locator('#orig .pg img').first().scrollIntoViewIfNeeded();
+  await page.getByTestId('ink-pen').click();
+  const box = await frame().locator('#orig .pg img').first().boundingBox();
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.33, { steps: 10 });
+  await page.mouse.up();
+  const strokes = () => page.evaluate(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('#orig .pg svg.ink polyline').length);
+  assert((await strokes()) === 1, 'one stroke drawn');
+  await shot('09c-ink');
+  await page.getByTestId('ink-undo').click();
+  await page.waitForFunction(() => document.querySelector('[data-testid=reader-frame]').contentDocument.querySelectorAll('#orig .pg svg.ink polyline').length === 0, null, { timeout: 5000 });
+  await page.getByTestId('ink-undo').click(); // nothing left to undo: harmless
+  await page.mouse.move(box.x + box.width * 0.2, box.y + box.height * 0.3);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width * 0.7, box.y + box.height * 0.33, { steps: 10 });
+  await page.mouse.up();
+  await page.waitForTimeout(500);
+  await page.reload();
+  await frame().locator('#orig .pg svg.ink polyline').first().waitFor({ state: 'attached', timeout: 20000 });
+  assert((await strokes()) === 1, 'the stroke came back');
   await page.getByRole('button', { name: 'Kitap', exact: true }).click();
   await page.waitForFunction(() => !document.querySelector('[data-testid=reader-frame]').contentDocument.body.classList.contains('original'));
 });

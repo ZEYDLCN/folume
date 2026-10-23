@@ -105,6 +105,30 @@ def check_epub(path: Path) -> list[str]:
     return problems
 
 
+def check_xlsx(path: Path, doc: Document) -> list[str]:
+    """Open the workbook with LibreOffice (no code shared with the exporter) and compare its first sheet with the first table."""
+    soffice = shutil.which("soffice")
+    if soffice is None:
+        return []  # nothing independent to read it with here
+    out = path.parent / "xlsx-check"
+    shutil.rmtree(out, ignore_errors=True)
+    out.mkdir()
+    subprocess.run([soffice, "--headless", "--convert-to", "csv:Text - txt - csv (StarCalc):44,34,76,1", "--outdir", str(out), str(path)],
+                   capture_output=True, check=True, timeout=120)
+    import csv
+
+    rows = list(csv.reader((out / (path.stem + ".csv")).open(newline="", encoding="utf-8")))
+    tables = [b.table.rows for b in doc.blocks if b.type == "table" and b.table]
+    want = tables[0]
+    problems = []
+    if len(rows) != len(want):
+        problems.append(f"{path.name}: LibreOffice reads {len(rows)} rows, the table has {len(want)}")
+    for r, (got, exp) in enumerate(zip(rows, want, strict=False)):
+        if got != exp:
+            problems.append(f"{path.name}: row {r + 1} differs: {got} != {exp}")
+    return problems
+
+
 def main() -> int:
     exports, docfile = Path(sys.argv[1]), Path(sys.argv[2])
     doc = Document.model_validate_json(docfile.read_text())
@@ -129,6 +153,13 @@ def main() -> int:
             else:
                 source = path.read_text()
             text = pandoc(pandoc(source, "gfm", "html"), "html")
+        elif fmt == "xlsx":
+            problems += check_xlsx(path, doc)
+            print(("ok  " if not problems else "FAIL") + f" {e['file']}: first sheet read back by LibreOffice")
+            for p in problems:
+                print("      " + p)
+            failed += bool(problems)
+            continue
         else:
             text = path.read_text()
         problems += compare(e["file"], text, doc, appendix)

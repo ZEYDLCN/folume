@@ -30,5 +30,12 @@ export function readerStrings(): ReaderStrings {
     check: t('rt.check'),
     check_hint: t('rt.check_hint'),
     check_start: t('rt.check_start'),
+    back: t('rt.back'),
+    go_to: t('rt.go_to'),
+    open_doi: t('rt.open_doi'),
+    add_to_library: t('rt.add_to_library'),
+    add_to_list: t('rt.add_to_list'),
+    defined_on: t('rt.defined_on'),
+    go_to_definition: t('rt.go_to_definition'),
   };
 }

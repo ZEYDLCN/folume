@@ -14,11 +14,14 @@ from . import __version__
 from .ai.providers import LLMProvider, build_provider
 from .ai.service import AiService
 from .config import Settings
+from .feed import FeedService
+from .fetch import Fetcher
 from .jobs import JobManager
 from .sync_store import SyncStore
 
 
-def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | None = None) -> FastAPI:
+def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | None = None,
+               feed: FeedService | None = None) -> FastAPI:
     settings = settings or Settings.from_env()
     jobs = JobManager(settings)
 
@@ -34,6 +37,8 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
     app.state.jobs = jobs
     app.state.ai = AiService(settings, llm_provider or build_provider(settings))
     app.state.sync = SyncStore(settings.sync_db) if settings.sync_enabled else None
+    app.state.feed = feed or FeedService(
+        Fetcher(allow_private=settings.allow_private_urls, timeout=settings.url_timeout_seconds), base_url=settings.feed_url)
 
     if settings.cors_origins:
         app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["*"],
@@ -58,6 +63,7 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
         return JSONResponse(status_code=exc.status_code, content={"error": detail})
 
     from .routes import ai, documents, sync  # noqa: PLC0415 (routes read the app state)
+    from .routes import feed as feed_routes
     from .routes.ai import RateLimiter  # noqa: PLC0415
 
     app.state.ai_limiter = RateLimiter(limit=settings.ai_rate_limit_per_minute)
@@ -65,6 +71,7 @@ def create_app(settings: Settings | None = None, *, llm_provider: LLMProvider | 
     app.include_router(documents.router, prefix="/v1", dependencies=guarded)
     app.include_router(ai.router, prefix="/v1", dependencies=guarded)
     app.include_router(sync.router, prefix="/v1", dependencies=guarded)
+    app.include_router(feed_routes.router, prefix="/v1", dependencies=guarded)
 
     @app.get("/v1/health")
     def health() -> dict:

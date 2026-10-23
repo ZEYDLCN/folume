@@ -17,6 +17,20 @@ export interface SearchResult {
   score: number;
 }
 
+/** A whole block of a paper found for a question: what a grounded answer is built from. */
+export interface FoundPassage {
+  docId: string;
+  blockId: string;
+  page: number;
+  title: string;
+  section: string | null;
+  kind: string;
+  text: string;
+  score: number;
+}
+
+const PROSE_KINDS = new Set(['paragraph', 'list_item', 'caption', 'footnote']);
+
 interface Entry {
   docId: string;
   blockId: string;
@@ -67,6 +81,30 @@ export class LibrarySearch {
       const { snippet, ranges } = makeSnippet(e.text, q);
       out.push({ docId: e.docId, blockId: e.blockId, page: e.page, title: this.titles.get(e.docId) ?? '', section: e.section, snippet, ranges, score: h.score });
       if (out.length >= (opts.limit ?? 30)) break;
+    }
+    return out;
+  }
+
+  /**
+   * The blocks that best answer a question, from many papers: whole text, prose only, at most `perPaper` from one paper
+   * so that a single long paper cannot crowd out the rest.
+   */
+  passages(query: string, opts: { limit?: number; perPaper?: number; docIds?: string[] } = {}): FoundPassage[] {
+    const q = query.trim();
+    if (q.length < 2) return [];
+    const limit = opts.limit ?? 8;
+    const perPaper = opts.perPaper ?? 3;
+    const only = opts.docIds ? new Set(opts.docIds) : null;
+    const counts = new Map<string, number>();
+    const out: FoundPassage[] = [];
+    for (const h of this.index.search(q, Math.max(200, limit * 40))) {
+      const e = this.entries.get(h.id);
+      if (!e || !PROSE_KINDS.has(e.kind) || e.text.trim().length < 40) continue;
+      if (only && !only.has(e.docId)) continue;
+      if ((counts.get(e.docId) ?? 0) >= perPaper) continue;
+      counts.set(e.docId, (counts.get(e.docId) ?? 0) + 1);
+      out.push({ docId: e.docId, blockId: e.blockId, page: e.page, title: this.titles.get(e.docId) ?? '', section: e.section, kind: e.kind, text: e.text, score: h.score });
+      if (out.length >= limit) break;
     }
     return out;
   }

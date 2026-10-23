@@ -5,7 +5,8 @@ import { KEY } from './kv';
 import { Mutex, sharedMutex } from './mutex';
 import { markDeleted } from './tombstones';
 
-export type AnnotationOrigin = 'user' | 'ai';
+/** `shared`: a note someone sent the reader (see `author`); like AI text it is never mistaken for the reader's own. */
+export type AnnotationOrigin = 'user' | 'ai' | 'shared';
 
 /** A highlight and/or note anchored to a block and a character range of its rendered text. */
 export interface Annotation {
@@ -21,6 +22,8 @@ export interface Annotation {
   note: string;
   /** who wrote `note`: AI-generated text is always labelled as such */
   origin: AnnotationOrigin;
+  /** who wrote a shared note */
+  author?: string;
   tags: string[];
   page: number;
   createdAt: number;
@@ -64,7 +67,7 @@ export class AnnotationRepo {
     return out.sort((a, b) => b.updatedAt - a.updatedAt);
   }
 
-  add(input: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt' | 'tags' | 'note' | 'origin'> & Partial<Pick<Annotation, 'note' | 'origin' | 'tags'>>): Promise<Annotation> {
+  add(input: Omit<Annotation, 'id' | 'createdAt' | 'updatedAt' | 'tags' | 'note' | 'origin'> & Partial<Pick<Annotation, 'note' | 'origin' | 'tags' | 'author'>>): Promise<Annotation> {
     return this.serial(async () => {
       const t = this.now();
       const a: Annotation = { note: '', origin: 'user', tags: [], ...input, id: this.newId(), createdAt: t, updatedAt: t };

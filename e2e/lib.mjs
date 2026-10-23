@@ -14,6 +14,7 @@ export const STRINGS = {
   bookmark: 'Yer imi', close: 'Kapat', equation: 'Denklem', figure: 'Şekil', loading: 'Yükleniyor…',
   empty_unsupported: 'Bu PDF taranmış görünüyor.', footnote: 'Dipnot', original_pages: 'Orijinal sayfalar',
   figure_text: 'Şekil içindeki yazı', table_text: 'Tablo metni',
+  back: 'Geri', go_to: 'Oraya git', open_doi: "DOI'yi aç", add_to_library: 'Kütüphaneye ekle', add_to_list: 'Okuma listesi', defined_on: 'Sayfa {n}’de tanımlanıyor', go_to_definition: 'Tanıma git',
 };
 
 export const SETTINGS = {
@@ -66,7 +67,7 @@ export async function openReader(browser, bundle, init = {}, viewport = { width:
   await host({
     type: 'init', doc: bundle.doc, settings: { ...SETTINGS, ...(init.settings || {}) }, mode: init.mode || 'book',
     anchor: init.anchor ?? null, bookmarks: init.bookmarks || [], highlights: init.highlights || [], strings: STRINGS,
-    focus: init.focus ?? null,
+    focus: init.focus ?? null, ink: init.ink ?? [],
   });
   const events = () => page.evaluate(() => window.__events);
   const waitFor = async (pred, what, timeout = 8000) => {

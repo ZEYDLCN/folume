@@ -7,6 +7,7 @@ import { buildMarkdown, buildText } from './paperMarkdown';
 import {
   DEFAULT_PAPER_OPTIONS, MIME, slugify, titleOf, type PaperFile, type PaperFormat, type PaperOptions,
 } from './paperShared';
+import { documentTables, tablesToXlsx } from './table';
 import { zipStore } from './zip';
 
 export type AssetLoader = (path: string) => Promise<Uint8Array | null>;
@@ -39,7 +40,7 @@ export async function exportPaper(
   const opts: PaperOptions = { ...DEFAULT_PAPER_OPTIONS, ...options };
   const stem = slugify(titleOf(doc));
   const enc = new TextEncoder();
-  const needsImages = opts.images && format !== 'text';
+  const needsImages = opts.images && format !== 'text' && format !== 'xlsx';
   const assets = needsImages ? await loadAssets(doc, load) : new Map<string, Uint8Array>();
   const summary = (images: number) => ({ blocks: doc.blocks.length, images, letters: documentLetterCount(doc) });
   switch (format) {
@@ -61,6 +62,11 @@ export async function exportPaper(
         opts.now,
       );
       return { filename: `${stem}.zip`, mime: 'application/zip', bytes: zip, summary: summary(r.images.size), chrome: r.chrome };
+    }
+    case 'xlsx': {
+      const tables = documentTables(doc);
+      if (!tables.length) throw new Error('no_tables');
+      return { filename: `${stem}-tables.xlsx`, mime: MIME.xlsx, bytes: tablesToXlsx(tables, opts.now), summary: { blocks: tables.length, images: 0, letters: documentLetterCount(doc) }, chrome: [] };
     }
     case 'text': {
       const r = buildText(doc, opts);

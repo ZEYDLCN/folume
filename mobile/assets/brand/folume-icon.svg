@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <rect width="1024" height="1024" fill="#141B36"/>
+  <g transform="translate(64 50) scale(1.75)">
+  <!-- Folume mark: a mortarboard resting on a pen nib. The nib opens like a book. -->
+  <!-- nib -->
+  <path fill="#EE8A5B" d="M168 236C168 196 204 176 256 176s88 20 88 60v96c0 44-50 84-88 124-38-40-88-80-88-124z"/>
+  <!-- open-book window -->
+  <path fill="#141B36" d="M196 244c0-26 22-42 60-42s60 16 60 42v50H196z"/>
+  <g fill="#EE8A5B">
+    <rect x="212" y="236" width="30" height="9" rx="4.5"/>
+    <rect x="212" y="256" width="30" height="9" rx="4.5"/>
+    <rect x="212" y="276" width="30" height="9" rx="4.5"/>
+    <rect x="270" y="236" width="30" height="9" rx="4.5"/>
+    <rect x="270" y="256" width="30" height="9" rx="4.5"/>
+    <rect x="270" y="276" width="30" height="9" rx="4.5"/>
+  </g>
+  <rect x="252" y="212" width="8" height="82" rx="4" fill="#141B36"/>
+  <!-- breather hole and slit -->
+  <circle cx="256" cy="344" r="15" fill="#141B36"/>
+  <path fill="#141B36" d="M252 356h8l-4 102z"/>
+  <!-- mortarboard -->
+  <path fill="#F2B6E3" stroke="#141B36" stroke-width="10" stroke-linejoin="round" d="M104 150 256 88l152 62-152 62z"/>
+  <!-- tassel -->
+  <path d="M120 160v78" stroke="#2D45EA" stroke-width="9" stroke-linecap="round" fill="none"/>
+  <path fill="#2D45EA" d="M108 234h24l8 44c1 6-3 10-8 10h-24c-5 0-9-4-8-10z"/>
+</g></svg>

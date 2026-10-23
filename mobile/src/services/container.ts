@@ -5,6 +5,7 @@ import type { KeyValueStore } from '@/data/kv';
 import { AnnotationRepo } from '@/data/annotations';
 import { CardRepo } from '@/data/cards';
 import { RecordStore } from '@/data/records';
+import { FixRepo, InkRepo, ProjectRepo, SubRepo, WantRepo } from '@/data/userdata';
 import { LibraryRepo } from '@/data/library';
 import { QuizRepo } from '@/data/quiz';
 import { useSettings } from '@/state/settings';
@@ -21,6 +22,11 @@ let annotations: AnnotationRepo | null = null;
 let quizzes: QuizRepo | null = null;
 let cards: CardRepo | null = null;
 let records: RecordStore | null = null;
+let fixes: FixRepo | null = null;
+let ink: InkRepo | null = null;
+let projects: ProjectRepo | null = null;
+let want: WantRepo | null = null;
+let subs: SubRepo | null = null;
 let knowledgeService: KnowledgeService | null = null;
 
 export function getStores() {
@@ -31,7 +37,12 @@ export function getStores() {
   quizzes ??= new QuizRepo(kv);
   cards ??= new CardRepo(kv);
   records ??= new RecordStore(kv);
-  return { kv, blobs, library, annotations, quizzes, cards, records };
+  fixes ??= new FixRepo(kv);
+  ink ??= new InkRepo(kv);
+  projects ??= new ProjectRepo(kv);
+  want ??= new WantRepo(kv);
+  subs ??= new SubRepo(kv);
+  return { kv, blobs, library, annotations, quizzes, cards, records, fixes, ink, projects, want, subs };
 }
 
 export function getKnowledge(): KnowledgeService {

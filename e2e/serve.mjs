@@ -5,7 +5,7 @@ import path from 'node:path';
 
 const TYPES = {
   '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.png': 'image/png',
-  '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.css': 'text/css', '.woff2': 'font/woff2',
+  '.ico': 'image/x-icon', '.ttf': 'font/ttf', '.css': 'text/css', '.woff2': 'font/woff2', '.webmanifest': 'application/manifest+json',
 };
 
 export function serve(root, port) {

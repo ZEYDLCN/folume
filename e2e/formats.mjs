@@ -1,6 +1,6 @@
 // Reading formats of the reader runtime: Book, Magazine, paged flow. Real Chromium, real backend output.
 import path from 'node:path';
-import { assert, check, done, inflate, launch, loadBundle, openReader, shots, timeOpen } from './lib.mjs';
+import { SETTINGS, assert, check, done, inflate, launch, loadBundle, openReader, shots, timeOpen } from './lib.mjs';
 
 const browser = await launch();
 const bundle = loadBundle('ieee_ml');
@@ -44,6 +44,37 @@ await check('a list item draws its marker once, and a paper converted before tha
   const oldItems = await r2.page.evaluate(() => [...document.querySelectorAll('#book .li')].map((n) => n.innerText.replace(/\s+/g, ' ').trim()));
   assert(oldItems.every((t) => /^• [A-Za-z]/.test(t)), JSON.stringify(oldItems));
   await r2.close();
+});
+
+await check('readable fonts, letter and word spacing and the reading ruler change only how the text looks', async () => {
+  const r = await openReader(browser, bundle, {}, PHONE);
+  const texts = () => blockTexts(r).then((t) => JSON.stringify(t));
+  const before = await texts();
+  await r.host({ type: 'settings', settings: { ...SETTINGS, fontFamily: 'hyperlegible', letterSpacing: 0.1, wordSpacing: 0.2, ruler: true } });
+  await r.page.waitForTimeout(300);
+  const facts = await r.page.evaluate(async () => {
+    await document.fonts.load("16px 'Atkinson Hyperlegible'");
+    await document.fonts.load("16px 'Atkinson Hyperlegible'", 'ğşı İ');
+    const cs = getComputedStyle(document.querySelector('#book p'));
+    const ruler = document.getElementById('ruler');
+    return {
+      family: cs.fontFamily, letter: parseFloat(cs.letterSpacing), word: parseFloat(cs.wordSpacing), fs: parseFloat(getComputedStyle(document.body).fontSize),
+      loaded: document.fonts.check("16px 'Atkinson Hyperlegible'"), turkish: document.fonts.check("16px 'Atkinson Hyperlegible'", 'ğşıİ'),
+      ruler: !!ruler, rulerEvents: ruler && getComputedStyle(ruler).pointerEvents, rulerBands: ruler ? ruler.querySelectorAll('.rb').length : 0,
+    };
+  });
+  assert(/Atkinson/.test(facts.family), `font family ${facts.family}`);
+  assert(facts.loaded && facts.turkish, `Atkinson loaded ${facts.loaded}, Turkish glyphs ${facts.turkish}`);
+  assert(Math.abs(facts.letter - 0.1 * facts.fs) < 0.2 && Math.abs(facts.word - 0.2 * facts.fs) < 0.3, `spacing ${facts.letter}px / ${facts.word}px at ${facts.fs}px`);
+  assert(facts.ruler && facts.rulerEvents === 'none' && facts.rulerBands === 2, 'ruler: two bands that let touches through');
+  assert((await texts()) === before, 'the words are the same in another font');
+  await r.page.screenshot({ path: path.join(shots, 'fmt-hyperlegible-ruler.png') });
+  await r.host({ type: 'settings', settings: { ...SETTINGS, fontFamily: 'dyslexic', ruler: false } });
+  await r.page.waitForTimeout(300);
+  const dys = await r.page.evaluate(async () => { await document.fonts.load("16px 'OpenDyslexic'"); return [getComputedStyle(document.querySelector('#book p')).fontFamily, document.fonts.check("16px 'OpenDyslexic'"), !!document.getElementById('ruler')]; });
+  assert(/OpenDyslexic/.test(dys[0]) && dys[1] === true && dys[2] === false, JSON.stringify(dys));
+  assert((await texts()) === before, 'text after the second font');
+  await r.close();
 });
 
 await check('Magazine: a masthead, section kickers, drop caps, and columns when there is room', async () => {

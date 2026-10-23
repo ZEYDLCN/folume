@@ -4,10 +4,15 @@ import { Pressable, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { notesToMarkdown } from '@/core/export/markdown';
+import { buildNotesShare, parseNotesShare, planNotesImport } from '@/core/shareNotes';
+import { slugify } from '@/core/export/paper';
+import { pickTextFile } from '@/services/picker';
+import { useSettings } from '@/state/settings';
 import type { Annotation } from '@/data/annotations';
 import type { LibraryEntry } from '@/data/library';
 import { getStores } from '@/services/container';
 import { shareTextFile } from '@/services/share';
+import type { StringKey } from '@/i18n';
 import { AppText, Badge, Button, Card, IconButton, Segmented } from '@/ui/components';
 import { space, useColors } from '@/ui/theme';
 import { useT } from '@/ui/useT';
@@ -21,6 +26,8 @@ export default function NotesScreen() {
   const [entries, setEntries] = useState<LibraryEntry[]>([]);
   const [items, setItems] = useState<Annotation[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
+  const [message, setMessage] = useState<{ tone: 'ok' | 'error'; text: string } | null>(null);
+  const authorName = useSettings((s) => s.authorName);
 
   const load = useCallback(async () => {
     const { library, annotations } = getStores();
@@ -32,7 +39,7 @@ export default function NotesScreen() {
   const shown = useMemo(
     () =>
       items.filter((a) =>
-        filter === 'all' ? true : filter === 'highlights' ? a.note.trim() === '' : filter === 'notes' ? a.note.trim() !== '' && a.origin === 'user' : a.origin === 'ai',
+        filter === 'all' ? true : filter === 'highlights' ? a.note.trim() === '' : filter === 'notes' ? a.note.trim() !== '' && a.origin !== 'ai' : a.origin === 'ai',
       ),
     [items, filter],
   );
@@ -41,6 +48,21 @@ export default function NotesScreen() {
     [entries, shown],
   );
 
+  const importNotes = async () => {
+    setMessage(null);
+    const text = await pickTextFile();
+    if (text === null) return;
+    const parsed = parseNotesShare(text);
+    if (!parsed.ok) return setMessage({ tone: 'error', text: t(`notes.import.error.${parsed.error}` as StringKey) });
+    const { library, annotations } = getStores();
+    const doc = entries.some((e) => e.id === parsed.share.paper.id) ? await library.loadDocument(parsed.share.paper.id) : null;
+    if (!doc) return setMessage({ tone: 'error', text: t('notes.import.error.missing_paper', { title: parsed.share.paper.title }) });
+    const plan = planNotesImport(doc, parsed.share, await annotations.list(doc.id));
+    for (const a of plan.add) await annotations.add(a);
+    setMessage({ tone: 'ok', text: t('notes.import.done', { n: plan.add.length, author: parsed.share.author || '—', skipped: plan.skipped }) });
+    await load();
+  };
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: c.bg }}>
       <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: space.sm }}>
@@ -48,6 +70,7 @@ export default function NotesScreen() {
         <AppText variant="heading" style={{ flex: 1 }}>
           {t('notes.title')}
         </AppText>
+        <IconButton icon="download-outline" label={t('notes.import')} onPress={() => void importNotes()} testID="import-notes" />
         {items.length ? (
           <IconButton
             icon="share-outline"
@@ -68,12 +91,25 @@ export default function NotesScreen() {
             { value: 'ai', label: t('notes.filter.ai') },
           ]}
         />
+        {message ? (
+          <AppText color={message.tone === 'ok' ? c.ok : c.danger} testID={message.tone === 'ok' ? 'notes-import-ok' : 'notes-import-error'}>
+            {message.text}
+          </AppText>
+        ) : null}
         {groups.length === 0 ? <AppText muted>{t('notes.empty')}</AppText> : null}
         {groups.map(({ entry, items: list }) => (
           <View key={entry.id} style={{ gap: space.sm }}>
-            <AppText variant="heading" numberOfLines={2}>
-              {entry.title}
-            </AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <AppText variant="heading" numberOfLines={2} style={{ flex: 1 }}>
+                {entry.title}
+              </AppText>
+              <IconButton
+                icon="paper-plane-outline"
+                label={t('notes.share')}
+                testID={`share-notes-${entry.id}`}
+                onPress={() => void shareTextFile(`${slugify(entry.title)}-notes.folume.json`, buildNotesShare({ docId: entry.id, title: entry.title, doi: entry.doi }, items, authorName), 'application/json')}
+              />
+            </View>
             {list.map((a) => (
               <Card key={a.id} style={{ gap: 8, borderLeftWidth: 5, borderLeftColor: a.color }} testID={`note-${a.id}`}>
                 {a.quote ? (
@@ -82,6 +118,7 @@ export default function NotesScreen() {
                 {a.note.trim() ? (
                   <View style={{ gap: 4 }}>
                     {a.origin === 'ai' ? <Badge label={t('notes.ai.label')} tone="warn" /> : null}
+                    {a.origin === 'shared' ? <Badge label={t('notes.sharedFrom', { name: a.author || '—' })} /> : null}
                     <AppText>{a.note}</AppText>
                   </View>
                 ) : null}

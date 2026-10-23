@@ -1,7 +1,7 @@
 // Knowledge workspace in Chromium: two "devices" (separate browser contexts) against one real API with sync on.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { assert, check, done, here, launch, shots } from './lib.mjs';
@@ -9,6 +9,7 @@ import { serve } from './serve.mjs';
 
 const API = 8767;
 const LLM = 8798;
+const ARXIV = 8799;
 const WEB = 8083;
 const tmp = mkdtempSync(path.join(tmpdir(), 'folume-e2e-'));
 const python = path.join(here, '../backend/.venv/bin/python');
@@ -18,6 +19,7 @@ const SYNC_KEY = 'correct horse battery staple';
 const NAMESPACE = createHash('sha256').update(`folume-sync-v1:${SYNC_KEY}`).digest('hex');
 
 const llm = spawn(python, [path.join(here, 'fake_llm_server.py'), String(LLM)], { stdio: 'ignore' });
+const arxiv = spawn(python, [path.join(here, 'fake_arxiv_server.py'), String(ARXIV)], { stdio: 'ignore' });
 const api = spawn(python, ['-m', 'uvicorn', 'folume.main:app', '--port', String(API)], {
   cwd: path.join(here, '../backend'),
   env: {
@@ -26,6 +28,8 @@ const api = spawn(python, ['-m', 'uvicorn', 'folume.main:app', '--port', String(
     FOLUME_CORS_ORIGINS: `http://localhost:${WEB}`,
     FOLUME_LLM_BASE_URL: `http://127.0.0.1:${LLM}`,
     FOLUME_LLM_MODEL: 'fake-model',
+    FOLUME_FEED_URL: `http://127.0.0.1:${ARXIV}/api/query`,
+    FOLUME_ALLOW_PRIVATE_URLS: '1',
     FOLUME_SYNC_ENABLED: '1',
     FOLUME_SYNC_DB: path.join(tmp, 'sync.sqlite3'),
   },
@@ -43,6 +47,7 @@ const up = async (url) => {
 };
 await up(`http://localhost:${API}/v1/health`);
 await up(`http://127.0.0.1:${LLM}/__requests`);
+await up(`http://127.0.0.1:${ARXIV}/__requests`);
 
 const browser = await launch();
 const errors = [];
@@ -148,6 +153,91 @@ await check('tags label papers and filter the library', async () => {
   await p.getByTestId(`paper-${companion}`).waitFor();
 });
 
+await check('the reading list takes a Zotero-style bibliography file, a DOI by hand, and hands a paper to "add from a link"', async () => {
+  const p = A.page;
+  await p.getByTestId('open-want').click();
+  await p.getByTestId('want-empty').waitFor();
+  const bib = path.join(tmp, 'library.bib');
+  writeFileSync(bib, `@article{a, title={Attention Is {All} You Need}, author={Vaswani, Ashish and Shazeer, Noam}, year={2017}, doi={10.48550/arXiv.1706.03762}, eprint={1706.03762}}
+@inproceedings{b, title={{BERT}: Pre-training of Deep Bidirectional Transformers}, author={Devlin, Jacob}, year=2019, url={https://arxiv.org/abs/1810.04805}}
+@book{c, title={The Art of Computer Programming}, author={Knuth, Donald E.}, year={1968}}
+`);
+  const [chooser] = await Promise.all([p.waitForEvent('filechooser'), p.getByTestId('want-import-file').click()]);
+  await chooser.setFiles(bib);
+  await p.getByTestId('want-message-ok').waitFor();
+  assert(/Added 3 papers; 0 were already/.test(await p.getByTestId('want-message-ok').textContent()), await p.getByTestId('want-message-ok').textContent());
+  await p.getByText('Attention Is All You Need').waitFor();
+  assert((await p.getByText('Ashish Vaswani').count()) >= 1, 'authors are written First Last');
+  // the same file again adds nothing
+  const [again] = await Promise.all([p.waitForEvent('filechooser'), p.getByTestId('want-import-file').click()]);
+  await again.setFiles(bib);
+  await p.waitForFunction(() => /Added 0 papers; 3 were already/.test(document.querySelector('[data-testid=want-message-ok]')?.textContent ?? ''));
+  // a DOI by hand
+  await p.getByTestId('want-input').fill('10.1145/3292500.3330701');
+  await p.getByTestId('want-add').click();
+  await p.getByText('doi:10.1145/3292500.3330701').first().waitFor();
+  await A.shot('02c-reading-list');
+  // hand a paper over: the library opens the link dialog with its arXiv id filled in
+  const bert = p.locator('[data-testid^=want-w]').filter({ hasText: 'BERT' }).first();
+  await bert.locator('[data-testid^=want-import-]').click();
+  await p.getByTestId('link-sheet').waitFor();
+  assert((await p.getByTestId('link-input').inputValue()) === '1810.04805', await p.getByTestId('link-input').inputValue());
+  assert(/arXiv 1810\.04805/.test(await p.getByTestId('link-kind').textContent()), 'recognised as arXiv');
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId('open-want').click();
+  // reading it can be ticked off
+  await p.locator('[data-testid^=want-done-]').first().click();
+  await p.getByText(/Already read \(1\)/).waitFor();
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('want-badge').waitFor();
+});
+
+await check('following a topic on arXiv lists its newest papers, marks the ones not seen before, and hands them to the reading list or the library', async () => {
+  const p = A.page;
+  const asked = async () => (await (await fetch(`http://127.0.0.1:${ARXIV}/__requests`)).json());
+  await p.getByTestId('open-feed').click();
+  await p.getByTestId('feed-none').waitFor();
+  await p.getByTestId('feed-suggest-cs.LG').click();
+  assert((await p.getByTestId('feed-category').inputValue()) === 'cs.LG', 'a suggestion fills the category');
+  await p.getByTestId('feed-follow').click();
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await p.locator('[data-testid^=feed-paper-]').count()) === 3, 'three papers');
+  assert(/3 new papers/.test(await p.getByTestId('feed-new-count').textContent()), 'all three are new the first time');
+  assert((await asked()).at(-1) === 'cat:cs.LG', `the server asked arXiv for ${(await asked()).at(-1)}`);
+  // BERT is already on the reading list (from the bibliography file); the others are not
+  const bert = p.getByTestId('feed-paper-1810_04805');
+  assert(/On your reading list/.test(await bert.textContent()), 'known to the reading list');
+  assert((await p.getByTestId('feed-want-1810_04805').count()) === 0, 'no second copy offered');
+  await A.shot('02e-feed');
+  await p.getByTestId('feed-want-2401_01234').click();
+  await p.getByTestId('feed-notice').waitFor();
+  assert(/Added to your reading list/.test(await p.getByTestId('feed-notice').textContent()), 'added');
+  assert(/On your reading list/.test(await p.getByTestId('feed-paper-2401_01234').textContent()), 'now on the list');
+  // a second topic, by keywords
+  await p.getByTestId('feed-keywords').fill('sparse routing');
+  await p.getByTestId('feed-follow').click();
+  await p.waitForFunction(() => document.querySelectorAll('[data-testid^=feed-sub-]').length === 2);
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await asked()).at(-1) === 'all:"sparse routing"', `keywords query: ${(await asked()).at(-1)}`);
+  // what was shown counts as seen: nothing is "new" the next time
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-feed').click();
+  await p.getByTestId('feed-results').waitFor({ timeout: 20000 });
+  assert((await p.getByTestId('feed-new-count').count()) === 0, 'nothing new the second time');
+  assert((await p.getByText('New', { exact: true }).count()) === 0, 'no New badges');
+  // hand a paper to the library: the link dialog opens with its arXiv id
+  await p.getByTestId('feed-import-hep_th_9901001').click();
+  await p.getByTestId('link-sheet').waitFor();
+  assert((await p.getByTestId('link-input').inputValue()) === 'hep-th/9901001', await p.getByTestId('link-input').inputValue());
+  await p.getByTestId('sheet-close').click();
+  // stop following
+  await p.getByTestId('open-feed').click();
+  await p.locator('[data-testid^=feed-unfollow-]').first().click();
+  await p.locator('[data-testid^=feed-unfollow-]').first().click();
+  await p.getByTestId('feed-none').waitFor();
+  await p.getByTestId('screen-back').click();
+});
+
 await check('search finds text across papers and opens the paper at that block', async () => {
   const p = A.page;
   await p.getByTestId('open-search').click();
@@ -163,6 +253,65 @@ await check('search finds text across papers and opens the paper at that block',
   await p.getByTestId('search-input').waitFor();
   await p.getByTestId('search-input').fill('zzzzqqq');
   await p.getByTestId('search-empty').waitFor({ timeout: 10000 });
+  await p.getByTestId('screen-back').click();
+});
+
+await check('a project holds a table of papers: cells are filled with the papers’ own sentences and pages, and the table exports', async () => {
+  const p = A.page;
+  await p.getByTestId('open-projects').click();
+  await p.getByTestId('projects-empty').waitFor();
+  await p.getByTestId('project-new-name').fill('Sparse models review');
+  await p.getByTestId('project-create').click();
+  await p.getByTestId('project-empty').waitFor();
+  await p.getByTestId('project-add-papers').click();
+  await p.getByTestId(`project-pick-${ieee}`).click();
+  await p.getByTestId(`project-pick-${companion}`).click();
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId(`project-paper-${ieee}`).waitFor();
+  await p.getByTestId('project-suggest-all').click();
+  await p.getByTestId('project-notice').waitFor();
+  assert(/Filled \d+ cells/.test(await p.getByTestId('project-notice').textContent()), await p.getByTestId('project-notice').textContent());
+  const results = await p.getByTestId(`cell-${ieee}-c4`).inputValue();
+  assert(/\d+%/.test(results) && /\(p\. \d+\)$/.test(results), `results cell: ${results}`);
+  const limits = await p.getByTestId(`cell-${ieee}-c5`).inputValue();
+  assert(/limitation of expert gating/i.test(limits), `limitations cell: ${limits}`);
+  // every filled cell is a sentence of the paper itself
+  const doc = JSON.parse(readFileSync(path.join(here, 'out/ieee_ml/document.json'), 'utf8'));
+  const all = doc.blocks.map((b) => b.text).join('\n');
+  for (const c of ['c1', 'c2', 'c3', 'c4', 'c5']) {
+    const v = await p.getByTestId(`cell-${ieee}-${c}`).inputValue();
+    assert(v === '' || all.includes(v.replace(/ \(p\. \d+\)$/, '')), `cell ${c} is not from the paper: ${v}`);
+  }
+  // writing by hand, and a column of one's own
+  await p.getByTestId(`cell-${companion}-c1`).fill('My own note');
+  await p.getByTestId(`cell-${companion}-c1`).blur();
+  await p.getByTestId('project-columns').click();
+  await p.getByTestId('column-new').fill('Random seeds');
+  await p.getByTestId('column-add').click();
+  await p.getByTestId('sheet-close').click();
+  await p.getByTestId(`cell-suggest-${ieee}-c6`).click();
+  await p.waitForFunction((id) => /seeds/i.test(document.querySelector(`[data-testid="cell-${id}-c6"]`)?.value ?? ''), ieee);
+  await A.shot('02d-project');
+  // the table leaves as CSV and Excel
+  await p.getByTestId('project-export').click();
+  const [csv] = await Promise.all([p.waitForEvent('download'), p.getByTestId('project-export-csv').click()]);
+  const text = readFileSync(await csv.path(), 'utf8').replace(/^﻿/, '');
+  const lines = text.split('\r\n');
+  assert(lines[0] === 'Paper,Authors,Year,Problem,Method,Data,Results,Limitations,Random seeds', lines[0]);
+  assert(text.includes('Sparse Routing for Efficient Transformers') && text.includes('My own note'), text.slice(0, 300));
+  await p.getByTestId('project-export').click();
+  const [xlsx] = await Promise.all([p.waitForEvent('download'), p.getByTestId('project-export-xlsx').click()]);
+  const bytes = readFileSync(await xlsx.path());
+  assert(bytes.subarray(0, 2).toString() === 'PK' && bytes.includes('xl/worksheets/sheet1.xml') && bytes.includes('My own note'), 'a workbook with the cell');
+  // it is still there after leaving
+  await p.getByTestId('project-back').click();
+  const card = p.locator('[data-testid^=project-p]').filter({ hasText: '2 papers' }).first();
+  await card.waitFor({ timeout: 10000 });
+  await card.click();
+  await p.getByTestId(`cell-${companion}-c1`).waitFor();
+  assert((await p.getByTestId(`cell-${companion}-c1`).inputValue()) === 'My own note', 'the cell is kept');
+  await p.getByTestId('project-delete').click();
+  await p.getByTestId('projects-empty').waitFor();
   await p.getByTestId('screen-back').click();
 });
 
@@ -203,8 +352,59 @@ await check('AI comparison shows what is sent first and cites passages of both p
   await p.getByTestId('sheet-close').click();
 });
 
+await check('asking the library searches every paper, shows what is sent, and cites passages with their paper', async () => {
+  const p = A.page;
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-ask').click();
+  const count = async () => (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).length;
+  const before = await count();
+  await p.getByTestId('ask-library-input').fill('How does contrastive pretraining improve robustness?');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('send-preview').waitFor({ timeout: 10000 });
+  assert((await count()) === before, 'nothing is sent before confirmation');
+  assert(/Learning Compact Representations/.test(await p.getByTestId('send-preview').textContent()), 'the preview names the paper a passage comes from');
+  await A.shot('05b-ask-preview');
+  await p.getByTestId('send-confirm').click();
+  await p.getByTestId('ask-result').waitFor({ timeout: 15000 });
+  assert((await count()) === before + 1, 'exactly one model call');
+  assert((await p.getByTestId('segment-grounded').count()) >= 1, 'a grounded sentence');
+  const sent = (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).at(-1).messages.find((m) => m.role === 'user').content;
+  assert(/How does contrastive pretraining improve robustness\?/.test(typeof sent === 'string' ? sent : sent.map((x) => x.text ?? '').join('\n')), 'the question is sent');
+  await A.shot('05c-ask-result');
+  await p.locator('[data-testid^=cite-]').first().click();
+  await p.waitForURL(/\/reader\/.+block=b\d+/, { timeout: 10000 });
+  await A.frame().locator('#book .h').first().waitFor({ timeout: 20000 });
+  await p.getByTestId('reader-back').click();
+  await p.getByTestId('screen-back').click();
+});
+
+await check('with AI switched off, asking lists the matching passages and sends nothing', async () => {
+  const p = A.page;
+  const count = async () => (await (await fetch(`http://127.0.0.1:${LLM}/__requests`)).json()).length;
+  const before = await count();
+  await p.getByTestId('open-settings').click();
+  await A.setSwitch('switch-ai', false);
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-ask').click();
+  await p.getByTestId('ask-library-input').fill('expert gating sensitivity');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('ask-result').waitFor({ timeout: 10000 });
+  assert(/switched off/.test(await p.getByTestId('ask-result').textContent()), 'says why there is no written answer');
+  assert((await p.getByTestId('segment-grounded').count()) >= 1, 'matching passages are listed');
+  assert((await count()) === before, 'nothing was sent');
+  await p.getByTestId('ask-library-input').fill('zebra crossing xylophone');
+  await p.getByTestId('ask-library-send').click();
+  await p.getByTestId('ask-none').waitFor({ timeout: 10000 });
+  await p.getByTestId('screen-back').click();
+  await p.getByTestId('open-settings').click();
+  await A.setSwitch('switch-ai', true);
+  await p.getByTestId('screen-back').click();
+});
+
 await check('a defined concept becomes a review card, and the library shows what is due', async () => {
   const p = A.page;
+  await p.getByTestId(`connections-${ieee}`).click();
+  await p.getByTestId('concept-add-review').first().waitFor({ timeout: 15000 });
   await p.getByTestId('concept-add-review').first().click();
   await p.getByText('Added to your review list').first().waitFor();
   await p.getByTestId('screen-back').click();
@@ -286,6 +486,29 @@ await check('citations export as BibTeX, RIS and CSL-JSON without inventing a ve
   const csl = JSON.parse(await grab('export-csl'));
   assert(csl.length === 2 && csl[0].type === 'article', 'csl');
   await A.shot('09-data');
+});
+
+await check('notes, review cards and highlights go to Obsidian, Anki and Readwise in the formats those apps import', async () => {
+  const p = A.page;
+  const grab = async (testId) => {
+    const [dl] = await Promise.all([p.waitForEvent('download', { timeout: 8000 }), p.getByTestId(testId).click()]);
+    return readFileSync(await dl.path());
+  };
+  const vault = await grab('export-obsidian');
+  assert(vault.subarray(0, 2).toString() === 'PK', 'a ZIP');
+  for (const needle of ['Folume/Index.md', 'Folume/Sparse Routing for Efficient Transformers.md', 'Synced from device A', 'source: "folume"', '## Highlights and notes']) {
+    assert(vault.includes(needle), `the vault has ${needle}`);
+  }
+  assert(vault.includes('[[Learning Compact Representations with Contrastive Pretraining]]'), 'related papers are linked');
+  const anki = (await grab('export-anki')).toString('utf8').split('\n');
+  assert(anki.slice(0, 4).join('|') === '#separator:tab|#html:true|#guid column:1|#tags column:4', anki.slice(0, 4).join('|'));
+  const rows = anki.slice(4).filter(Boolean);
+  assert(rows.length >= 1 && rows.every((r) => r.split('\t').length === 4 && r.startsWith('folume-')), `anki rows: ${rows.join(' // ').slice(0, 300)}`);
+  assert(rows.some((r) => /<i>.*Sparse Routing.*, p\. \d+<\/i>/.test(r)), 'a card names its source');
+  const rw = (await grab('export-readwise')).toString('utf8').split('\r\n');
+  assert(rw[0] === 'Highlight,Title,Author,URL,Note,Location,Date', rw[0]);
+  assert(rw.some((r) => r.includes('Synced from device A')), 'the note is in the highlights');
+  await p.getByTestId('apps-ok').waitFor();
 });
 
 let backupText = '';
@@ -394,4 +617,5 @@ await browser.close();
 web.close();
 api.kill();
 llm.kill();
+arxiv.kill();
 done();

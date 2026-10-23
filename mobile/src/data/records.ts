@@ -2,6 +2,7 @@ import type { Card } from '@/core/learning/srs';
 import { parseRecordKey, validRecordData, type RecordKind, type SyncRecord } from '@/core/sync/records';
 
 import { annKey, type Annotation } from './annotations';
+import { fixKey, inkKey, PROJECTS_KEY, SUBS_KEY, WANT_KEY, type BlockFix, type InkPage, type Project, type Subscription, type WantItem } from './userdata';
 import { cardsKey } from './cards';
 import { KEY, type KeyValueStore } from './kv';
 import type { DocState, LibraryEntry, TagsRecord } from './library';
@@ -11,7 +12,7 @@ import type { QuizResult } from './quiz';
 import { readTombstones, TOMBSTONES_KEY } from './tombstones';
 
 const quizKey = (docId: string) => `${KEY.docPrefix(docId)}quiz`;
-const DOC_KEY = /^folume:v1:doc:([A-Za-z0-9_.-]{1,80}):(ann|state|quiz|cards|tags)$/;
+const DOC_KEY = /^folume:v1:doc:([A-Za-z0-9_.-]{1,80}):(ann|state|quiz|cards|tags|fix|ink)$/;
 
 export interface ApplyResult {
   applied: number;
@@ -53,8 +54,15 @@ export class RecordStore {
         } else if (suffix === 'tags') {
           const t = await this.kv.get<TagsRecord>(k);
           if (t) out.push(live(`tags/${docId}`, t.updatedAt, t));
+        } else if (suffix === 'fix') {
+          for (const f of (await this.kv.get<BlockFix[]>(k)) ?? []) out.push(live(`fix/${docId}/${f.id}`, f.updatedAt, f));
+        } else if (suffix === 'ink') {
+          for (const i of (await this.kv.get<InkPage[]>(k)) ?? []) out.push(live(`ink/${docId}/${i.id}`, i.updatedAt, i));
         }
       }
+      for (const p of (await this.kv.get<Project[]>(PROJECTS_KEY)) ?? []) out.push(live(`proj/${p.id}`, p.updatedAt, p));
+      for (const w of (await this.kv.get<WantItem[]>(WANT_KEY)) ?? []) out.push(live(`want/${w.id}`, w.updatedAt, w));
+      for (const x of (await this.kv.get<Subscription[]>(SUBS_KEY)) ?? []) out.push(live(`sub/${x.id}`, x.updatedAt, x));
       const newest = new Map(out.map((r) => [r.key, r.updatedAt]));
       for (const [key, at] of Object.entries(await readTombstones(this.kv))) {
         if ((newest.get(key) ?? -1) < at) out.push({ key, updatedAt: at, deleted: true, data: null });
@@ -75,7 +83,7 @@ export class RecordStore {
           continue;
         }
         const data = rec.data as { docId?: string; id?: string } | null;
-        if (!rec.deleted && ((data?.docId !== undefined && data.docId !== parsed.docId) || (parsed.id !== null && data?.id !== parsed.id))) {
+        if (!rec.deleted && ((data?.docId !== undefined && parsed.docId !== null && data.docId !== parsed.docId) || (parsed.id !== null && data?.id !== parsed.id))) {
           result.invalid += 1;
           continue;
         }
@@ -117,8 +125,20 @@ export class RecordStore {
     });
   }
 
-  private async readLocal(kind: RecordKind, docId: string, id: string | null): Promise<Local | null> {
+  private async readLocal(kind: RecordKind, docId: string | null, id: string | null): Promise<Local | null> {
+    if (kind === 'proj' || kind === 'want' || kind === 'sub') {
+      const list = (await this.kv.get<(Project | WantItem | Subscription)[]>(kind === 'proj' ? PROJECTS_KEY : kind === 'want' ? WANT_KEY : SUBS_KEY)) ?? [];
+      const item = list.find((x) => x.id === id);
+      return item ? { updatedAt: item.updatedAt, data: item } : null;
+    }
+    if (docId === null) return null;
     switch (kind) {
+      case 'fix':
+      case 'ink': {
+        const list = (await this.kv.get<(BlockFix | InkPage)[]>(kind === 'fix' ? fixKey(docId) : inkKey(docId))) ?? [];
+        const item = list.find((x) => x.id === id);
+        return item ? { updatedAt: item.updatedAt, data: item } : null;
+      }
       case 'ann': {
         const a = ((await this.kv.get<Annotation[]>(annKey(docId))) ?? []).find((x) => x.id === id);
         return a ? { updatedAt: a.updatedAt, data: a } : null;
@@ -143,12 +163,20 @@ export class RecordStore {
   }
 
   /** `data === null` removes the record. */
-  private async writeLocal(kind: RecordKind, docId: string, id: string | null, data: unknown | null): Promise<void> {
+  private async writeLocal(kind: RecordKind, docId: string | null, id: string | null, data: unknown | null): Promise<void> {
     const upsert = async <T extends { id: string }>(key: string, item: T | null) => {
       const list = ((await this.kv.get<T[]>(key)) ?? []).filter((x) => x.id !== id);
       await this.kv.set(key, item ? [...list, item] : list);
     };
+    if (kind === 'proj') return upsert(PROJECTS_KEY, data as Project | null);
+    if (kind === 'want') return upsert(WANT_KEY, data as WantItem | null);
+    if (kind === 'sub') return upsert(SUBS_KEY, data as Subscription | null);
+    if (docId === null) return;
     switch (kind) {
+      case 'fix':
+        return upsert(fixKey(docId), data as BlockFix | null);
+      case 'ink':
+        return upsert(inkKey(docId), data as InkPage | null);
       case 'ann':
         return upsert(annKey(docId), data as Annotation | null);
       case 'quiz':

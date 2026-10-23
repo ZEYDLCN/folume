@@ -49,7 +49,9 @@ export default function ReportScreen() {
       ? t('report.complete.complete', { n: fmt(verdict.letters) })
       : verdict.kind === 'recovered'
         ? t('report.complete.recovered', { n: fmt(verdict.letters), r: fmt(verdict.recovered) })
-        : verdict.kind === 'incomplete'
+        : verdict.kind === 'ocr'
+          ? t('report.complete.ocr', { n: fmt(verdict.letters) })
+          : verdict.kind === 'incomplete'
           ? t('report.complete.incomplete', { missing: fmt(verdict.missing), extra: fmt(verdict.extra) })
           : t('report.complete.unavailable');
   const countKeys = ['heading', 'paragraph', 'figure', 'table', 'equation', 'reference'] as const;
@@ -80,9 +82,9 @@ export default function ReportScreen() {
           </AppText>
         </Card>
 
-        <Card style={{ gap: space.sm, borderLeftWidth: 5, borderLeftColor: verdict.kind === 'complete' ? c.ok : verdict.kind === 'recovered' ? c.warn : c.danger }} testID="completeness">
+        <Card style={{ gap: space.sm, borderLeftWidth: 5, borderLeftColor: verdict.kind === 'complete' ? c.ok : verdict.kind === 'recovered' || verdict.kind === 'ocr' ? c.warn : c.danger }} testID="completeness">
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm }}>
-            <Badge label={verdict.kind === 'complete' ? '✓' : verdict.kind === 'recovered' ? '!' : '✕'} tone={verdict.kind === 'complete' ? 'ok' : verdict.kind === 'recovered' ? 'warn' : 'danger'} />
+            <Badge label={verdict.kind === 'complete' ? '✓' : verdict.kind === 'ocr' ? '≈' : verdict.kind === 'recovered' ? '!' : '✕'} tone={verdict.kind === 'complete' ? 'ok' : verdict.kind === 'recovered' || verdict.kind === 'ocr' ? 'warn' : 'danger'} />
             <AppText variant="heading">{t('report.complete')}</AppText>
           </View>
           <AppText>{verdictText}</AppText>
@@ -92,7 +94,7 @@ export default function ReportScreen() {
             </AppText>
           ) : null}
           <AppText variant="caption" muted>
-            {t('report.complete.how')}
+            {t(verdict.kind === 'ocr' ? 'report.complete.ocr.how' : 'report.complete.how')}
           </AppText>
         </Card>
 

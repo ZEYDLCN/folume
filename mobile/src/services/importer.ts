@@ -82,6 +82,7 @@ async function mapLimit<T>(items: T[], limit: number, work: (item: T, index: num
 const USER_FACING = new Set([
   'not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized',
   'invalid_url', 'url_not_allowed', 'fetch_failed', 'timeout', 'url_import_disabled', 'page_too_large', 'too_complex',
+  'ocr_too_many_pages', 'ocr_failed',
 ]);
 
 /**

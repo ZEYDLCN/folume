@@ -1,3 +1,4 @@
+import type { FeedResponse } from '@/core/feed';
 import type { Document } from '@/core/types';
 
 export interface ApiConfig {
@@ -17,12 +18,16 @@ export interface JobStatus {
 export interface Capabilities {
   version: string;
   parser: { name: string; scanned_pdf_ocr: boolean };
-  limits: { max_upload_mb: number; max_pages: number };
+  limits: { max_upload_mb: number; max_pages: number; ocr_max_pages?: number };
+  /** true when the server reads scanned PDFs with OCR */
+  ocr?: boolean;
   retention_seconds: number;
   uploads_persisted: boolean;
   ai: { enabled: boolean; vision: boolean };
   sync: { enabled: boolean };
   url_import?: boolean;
+  /** the server can follow arXiv for new papers */
+  feed?: boolean;
 }
 
 export interface SyncWireRecord {
@@ -100,6 +105,15 @@ export class FolumeApi {
 
   capabilities(): Promise<Capabilities> {
     return this.json('/v1/capabilities');
+  }
+
+  /** New papers on arXiv for a category and/or keywords, newest first; the server asks arXiv and caches the answer. */
+  feed(params: { category?: string | null; q?: string | null; limit?: number }): Promise<FeedResponse> {
+    const query = new URLSearchParams();
+    if (params.category) query.set('category', params.category);
+    if (params.q) query.set('q', params.q);
+    if (params.limit) query.set('limit', String(params.limit));
+    return this.json(`/v1/feed/arxiv?${query.toString()}`);
   }
 
   /** The server downloads the paper itself (arXiv id, DOI, page or PDF link) and converts it. */

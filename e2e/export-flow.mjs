@@ -130,6 +130,59 @@ await check('plain text, and the removed page text can be left out', async () =>
   manifest.push({ file: 'no-appendix.txt', format: 'text', appendix: false });
 });
 
+await check('the tables can be taken out as an Excel workbook', async () => {
+  await pick('Tables (Excel)');
+  assert((await page.getByTestId('export-images').count()) === 0 && (await page.getByTestId('export-appendix').count()) === 0, 'no picture or appendix switches for tables');
+  const file = await run({ format: 'xlsx', appendix: true });
+  assert(file.endsWith('-tables.xlsx'), file);
+});
+
+await check('an annotated PDF carries the highlight, its note and a pencil stroke over the original pages, and other PDF tools read it back', async () => {
+  await page.getByTestId('sheet-close').click();
+  // a highlight with a Turkish note, made the way a reader makes one
+  const note = 'Önemli: şu çıkarım çok güzel, ığ İ';
+  const handle = await (await page.locator('[data-testid=reader-frame]').elementHandle()).contentFrame();
+  await handle.evaluate(() => {
+    const el = document.querySelectorAll('#book .blk-paragraph .bt')[2];
+    el.scrollIntoView({ block: 'center' });
+    const first = document.createTreeWalker(el, NodeFilter.SHOW_TEXT).nextNode();
+    const range = document.createRange();
+    range.setStart(first, 0);
+    range.setEnd(first, Math.min(110, first.textContent.length));
+    const sel = window.getSelection();
+    sel.removeAllRanges();
+    sel.addRange(range);
+  });
+  await page.getByTestId('selection-bar').waitFor({ timeout: 5000 });
+  await page.getByTestId('sel-note').click();
+  await page.getByTestId('note-input').fill(note);
+  await page.getByTestId('note-save').click();
+  await page.waitForTimeout(400);
+  const id = page.url().split('/reader/')[1].split('?')[0];
+  const stored = await page.evaluate((key) => JSON.parse(localStorage.getItem(key)), `folume:v1:doc:${id}:ann`);
+  assert(stored.length === 1, `one annotation, got ${stored.length}`);
+  // a pencil stroke on page 2 (drawing itself is covered by the reader scenarios)
+  const stroke = { c: '#c2512f', w: 0.004, p: [[0.2, 0.3], [0.5, 0.36], [0.8, 0.3]] };
+  await page.evaluate(([key, value]) => localStorage.setItem(key, JSON.stringify(value)), [`folume:v1:doc:${id}:ink`, [{ id: '2', docId: id, page: 2, strokes: [stroke], updatedAt: Date.now() }]]);
+  await openSheet();
+  await pick('Annotated PDF');
+  assert((await page.getByTestId('export-images').count()) === 0 && (await page.getByTestId('export-appendix').count()) === 0, 'no picture or appendix switches for the PDF');
+  // not part of the text round trip below: the pages are pictures, so it is checked by its own verifier
+  const [download] = await Promise.all([page.waitForEvent('download'), page.getByTestId('export-go').click()]);
+  const file = download.suggestedFilename();
+  await download.saveAs(path.join(out, file));
+  await page.getByTestId('export-done').waitFor({ timeout: 10000 });
+  assert(file === 'Sparse-Routing-for-Efficient-Transformers-annotated.pdf', file);
+  const detail = await page.getByTestId('export-done').textContent();
+  assert(/3 pages · 1 highlights · 0 notes · 1 strokes/.test(detail), detail);
+  await page.screenshot({ path: path.join(shots, 'export-05-pdf.png') });
+  const marks = { highlight: { blockId: stored[0].blockId, start: stored[0].start, end: stored[0].end, note }, ink: { page: 2, color: stroke.c, width: stroke.w, points: stroke.p } };
+  writeFileSync(path.join(out, 'annotated-marks.json'), JSON.stringify(marks));
+  const r = spawnSync(python, ['-I', path.join(here, 'verify_pdf.py'), path.join(out, file), path.join(out, 'annotated-marks.json'), path.join(here, 'out/ieee_ml/document.json')], { encoding: 'utf8' });
+  console.log(r.stdout.split('\n').map((l) => `      ${l}`).join('\n').trimEnd());
+  if (r.status !== 0) throw new Error(`verification failed\n${r.stderr.slice(-800)}`);
+});
+
 assert(errors.length === 0, `page errors: ${errors.join(' | ')}`);
 writeFileSync(path.join(out, 'exports.json'), JSON.stringify(manifest, null, 2));
 await page.getByTestId('sheet-close').click().catch(() => {});

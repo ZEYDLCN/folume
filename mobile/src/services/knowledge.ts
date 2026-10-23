@@ -1,7 +1,7 @@
 import { indexDocument } from '@/core/docModel';
 import { extractConcepts, type Concept } from '@/core/knowledge/concepts';
 import { relatedPapers, type Connection, type PaperConcepts } from '@/core/knowledge/connections';
-import { LibrarySearch, type SearchResult } from '@/core/knowledge/search';
+import { LibrarySearch, type FoundPassage, type SearchResult } from '@/core/knowledge/search';
 import type { LibraryEntry, LibraryRepo } from '@/data/library';
 
 /** Computed views over the library (search index, concepts, connections); built on demand and kept in memory. */
@@ -26,14 +26,23 @@ export class KnowledgeService {
     });
   }
 
-  async search(query: string, opts: { limit?: number; docId?: string } = {}): Promise<SearchResult[]> {
+  private async searcher(): Promise<LibrarySearch> {
     const entries = await this.library().list();
     const signature = this.signature(entries);
     if (this.searchCache?.signature !== signature) {
       const docs = (await Promise.all(entries.map((e) => this.library().loadDocument(e.id)))).filter((d) => d !== null);
       this.searchCache = { signature, search: new LibrarySearch(docs) };
     }
-    return this.searchCache.search.search(query, opts);
+    return this.searchCache.search;
+  }
+
+  async search(query: string, opts: { limit?: number; docId?: string } = {}): Promise<SearchResult[]> {
+    return (await this.searcher()).search(query, opts);
+  }
+
+  /** Whole blocks across the library that best answer a question; the grounding of "ask your library". */
+  async passages(query: string, opts: { limit?: number; perPaper?: number; docIds?: string[] } = {}): Promise<FoundPassage[]> {
+    return (await this.searcher()).passages(query, opts);
   }
 
   async conceptsOf(docId: string): Promise<Concept[]> {

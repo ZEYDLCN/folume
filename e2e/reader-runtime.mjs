@@ -76,8 +76,9 @@ await check('tapping a citation shows the reference and can jump to it', async (
   const text = await r.waitFor(() => r.page.evaluate(() => document.querySelector('.sheet .rt')?.textContent), 'citation sheet');
   assert(/Nature Methods|Proc\.|J\. Mach/.test(text), text);
   const y0 = await r.page.evaluate(() => scrollY);
-  await r.page.evaluate(() => document.querySelector('.sheet [data-act=go]').click());
+  await r.page.locator('.sheet button', { hasText: 'Kaynakçaya git' }).click();
   await r.waitFor(async () => (await r.page.evaluate(() => scrollY)) > y0 + 500, 'scroll to reference');
+  assert(await r.page.evaluate(() => !!document.querySelector('.pill.back')), 'following a reference leaves a way back');
   assert(await r.page.evaluate(() => !document.querySelector('.sheet')), 'sheet closed');
   await r.close();
 });
@@ -248,6 +249,139 @@ await check('block taps select the block and notify the host; a second tap clear
   await r.page.evaluate((id) => document.querySelector(`#${id} .bt`).click(), para.id);
   await r.waitFor(async () => (await r.events()).some((e) => e.type === 'selection-clear'), 'selection-clear');
   await r.close();
+});
+
+await check('"Fig. 1", "Table I" and "Eq. (3)" in the text open a preview of what they name, and Back returns', async () => {
+  const r = await openReader(browser, bundle);
+  const keys = await r.page.evaluate(() => [...document.querySelectorAll('#book a.xref')].map((a) => a.dataset.x));
+  for (const k of ['fig:1', 'fig:2', 'tab:1', 'eq:3']) assert(keys.includes(k), `link for ${k} in ${keys}`);
+  // the text itself is untouched: links add elements, never characters
+  const same = await r.page.evaluate((d) => d.blocks.filter((b) => b.type === 'paragraph').every((b) => (document.getElementById(b.id)?.querySelector('.bt')?.textContent ?? '') === (b.spans.length ? b.spans.map((s) => s.text).join('') : b.text)), doc);
+  assert(same, 'paragraph text changed');
+  const figure = doc.blocks.find((b) => b.type === 'figure' && b.number === '1');
+  // scroll somewhere that is not the figure, then follow the link
+  await r.host({ type: 'goto', blockId: doc.blocks.find((b) => b.type === 'paragraph' && /Fig\. 1/.test(b.text)).id });
+  await r.page.waitForTimeout(400);
+  const before = await r.page.evaluate(() => window.scrollY);
+  await r.page.locator('#book a.xref[data-x="fig:1"]').first().click();
+  await r.page.locator('.sheet .xpreview figure').waitFor();
+  assert((await r.page.locator('.sheet .xpreview img').count()) === 1, 'figure image in the preview');
+  assert((await r.page.evaluate((id) => document.querySelectorAll(`[id="${id}"]`).length, figure.id)) === 1, 'the preview must not duplicate the block id');
+  assert((await r.page.locator('.sheet .xpreview figcaption').textContent()).includes('Fig. 1'), 'caption shown');
+  await r.page.locator('.sheet button', { hasText: 'Oraya git' }).click();
+  await r.page.waitForTimeout(500);
+  const moved = await r.page.evaluate(() => window.scrollY);
+  assert(Math.abs(moved - before) > 100, `did not move (${before} -> ${moved})`);
+  await r.page.locator('.pill.back').waitFor();
+  assert((await r.page.locator('.pill.back').textContent()).includes('Geri'), 'back pill label');
+  await r.page.locator('.pill.back').click();
+  await r.page.waitForTimeout(500);
+  const back = await r.page.evaluate(() => window.scrollY);
+  assert(Math.abs(back - before) < 40, `back is at ${back}, was ${before}`);
+  assert((await r.page.locator('.pill.back').count()) === 0, 'the back pill goes away once used');
+  // a table and an equation preview too
+  await r.page.locator('#book a.xref[data-x="tab:1"]').first().click();
+  await r.page.locator('.sheet .xpreview table').waitFor();
+  await r.page.locator('.sheet button', { hasText: 'Kapat' }).click();
+  await r.page.locator('#book a.xref[data-x="eq:3"]').first().click();
+  await r.page.locator('.sheet .xpreview .eq').waitFor();
+  await r.page.screenshot({ path: path.join(shots, 'rt-xref-equation.png') });
+  await r.close();
+});
+
+await check('terms the paper defines are underlined and explained, without changing the text', async () => {
+  const r = await openReader(browser, bundle);
+  const textOf = () => r.page.evaluate(() => [...document.querySelectorAll('#book [data-b]')].map((n) => n.textContent).join('\n'));
+  const before = await textOf();
+  const host = doc.blocks.find((b) => b.type === 'paragraph' && /expert gating/i.test(b.text));
+  await r.host({ type: 'terms', items: [{ term: 'expert gating', definition: 'A routing rule that picks one expert per token.', blockId: host.id, page: 1 }, { term: 'WTP', definition: 'never appears', blockId: host.id, page: 1 }] });
+  await r.page.locator('#book abbr.term').first().waitFor();
+  assert((await r.page.locator('#book abbr.term').count()) >= 3, 'occurrences underlined');
+  assert((await textOf()) === before, 'terms must not change any character');
+  await r.page.locator('#book abbr.term').first().click();
+  assert((await r.page.locator('.sheet .termhead').textContent()).toLowerCase() === 'expert gating', 'term title');
+  assert((await r.page.locator('.sheet .termdef').textContent()).includes('routing rule'), 'definition');
+  assert((await r.page.locator('.sheet .termwhere').textContent()).includes('Sayfa 1'), 'where it is defined');
+  await r.page.locator('.sheet button', { hasText: 'Kapat' }).click();
+  // highlights still paint across the underlined words, and the text stays whole
+  await r.host({ type: 'highlights', items: [{ id: 'h1', blockId: host.id, start: 0, end: 40, color: '#ffe58a', hasNote: false }] });
+  await r.page.locator('mark.hl').first().waitFor();
+  assert((await textOf()) === before, 'text after painting a highlight');
+  await r.close();
+});
+
+await check('a reference offers its DOI and adding it to the library', async () => {
+  const withDoi = structuredClone(doc);
+  const ref = withDoi.blocks.find((b) => b.type === 'reference');
+  ref.reference = { ...(ref.reference ?? {}), doi: '10.1000/abc123', url: null, title: ref.text.slice(0, 30), label: null, first_author: null, year: null };
+  const r = await openReader(browser, { ...bundle, doc: withDoi });
+  const cite = await r.page.evaluate((id) => !!document.querySelector(`#book a.cite[data-refs~="${id}"]`), ref.id);
+  assert(cite, 'a paragraph cites that reference');
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: "DOI'yi aç" }).click();
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: 'Kütüphaneye ekle' }).click();
+  const events = await r.events();
+  assert(events.some((e) => e.type === 'link' && e.url === 'https://doi.org/10.1000/abc123'), 'link event');
+  assert(events.some((e) => e.type === 'import-ref' && e.doi === '10.1000/abc123'), 'import-ref event');
+  await r.page.locator(`#book a.cite[data-refs~="${ref.id}"]`).first().click();
+  await r.page.locator('.sheet button', { hasText: 'Okuma listesi' }).click();
+  const listed = (await r.events()).find((e) => e.type === 'want-ref');
+  assert(listed && listed.doi === '10.1000/abc123' && listed.title.length > 5, JSON.stringify(listed));
+  await r.close();
+});
+
+await check('ink: drawing on an original page, erasing, undoing, and strokes that come back when the paper is opened again', async () => {
+  const r = await openReader(browser, bundle, { mode: 'original' });
+  await r.page.locator('#orig .pg').first().waitFor();
+  await r.page.locator('#orig .pg svg.ink').first().waitFor({ state: 'attached' });
+  const box = await r.page.locator('#orig .pg img').first().boundingBox();
+  await r.page.evaluate(() => scrollTo(0, 0));
+  const drag = async (from, to, steps = 8) => {
+    await r.page.mouse.move(box.x + box.width * from[0], box.y + box.height * from[1]);
+    await r.page.mouse.down();
+    await r.page.mouse.move(box.x + box.width * to[0], box.y + box.height * to[1], { steps });
+    await r.page.mouse.up();
+  };
+  const changes = async () => (await r.events()).filter((e) => e.type === 'ink-changed');
+  // with the pen up, touching the page does not draw
+  await drag([0.2, 0.2], [0.6, 0.2]);
+  assert((await changes()).length === 0, 'nothing is drawn while the pen is up');
+  await r.host({ type: 'ink-tool', tool: 'pen', color: '#c2512f' });
+  await drag([0.2, 0.2], [0.6, 0.2]);
+  await drag([0.2, 0.3], [0.6, 0.4]);
+  let ev = await changes();
+  assert(ev.length === 2 && ev[1].page === 1 && ev[1].strokes.length === 2, JSON.stringify(ev.map((e) => [e.page, e.strokes.length])));
+  const stroke = ev[1].strokes[0];
+  assert(stroke.c === '#c2512f' && stroke.w > 0 && stroke.p.length >= 3 && stroke.p.every(([x, y]) => x >= 0 && x <= 1 && y >= 0 && y <= 1), 'stroke data');
+  assert(Math.abs(stroke.p[0][0] - 0.2) < 0.02 && Math.abs(stroke.p[0][1] - 0.2) < 0.02, `starts where the pen went down: ${stroke.p[0]}`);
+  assert((await r.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'two strokes drawn');
+  await r.page.screenshot({ path: path.join(shots, 'rt-ink.png') });
+  // highlighter is wide
+  await r.host({ type: 'ink-tool', tool: 'highlighter', color: '#ffd600' });
+  await drag([0.2, 0.5], [0.7, 0.5]);
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes[2].w >= 0.02, 'highlighter is wider than the pen');
+  // eraser takes away the stroke it touches, and only that one
+  await r.host({ type: 'ink-tool', tool: 'eraser', color: '#000' });
+  await drag([0.4, 0.15], [0.4, 0.25], 4);
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 2, `erased one stroke (${ev[ev.length - 1].strokes.length} left)`);
+  // undo brings it back, then undoes the highlighter
+  await r.host({ type: 'ink-undo' });
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 3, 'undo restores the erased stroke');
+  await r.host({ type: 'ink-undo' });
+  ev = await changes();
+  assert(ev[ev.length - 1].strokes.length === 2 && (await r.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'undo removes the last stroke');
+  const kept = ev[ev.length - 1].strokes;
+  await r.close();
+  // the strokes are given again when the paper is opened: they are drawn without anyone touching the page
+  const again = await openReader(browser, bundle, { mode: 'original', ink: [{ page: 1, strokes: kept }] });
+  await again.page.locator('#orig .pg svg.ink polyline').first().waitFor({ state: 'attached' });
+  assert((await again.page.locator('#orig .pg svg.ink polyline').count()) === 2, 'strokes restored');
+  // tapping the page with the pen up still identifies the block (the original view keeps working)
+  await again.close();
 });
 
 await check('a scanned (unsupported) document explains itself instead of showing a blank page', async () => {

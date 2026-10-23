@@ -7,6 +7,7 @@ import type { LibraryRepo, ReadingAnchor } from '@/data/library';
 import {
   parseReaderEvent,
   type HighlightView,
+  type InkPageView,
   type HostMessage,
   type ReaderEvent,
   type ReaderMode,
@@ -29,6 +30,7 @@ interface Props {
   anchor: ReadingAnchor | null;
   bookmarks: string[];
   highlights: HighlightView[];
+  ink?: InkPageView[];
   strings: ReaderStrings;
   focus: { blockId: string; page?: number } | null;
   onEvent: (event: ReaderEvent) => void;
@@ -62,6 +64,7 @@ export const ReaderView = forwardRef<ReaderViewHandle, Props>(function ReaderVie
           anchor: p.anchor,
           bookmarks: p.bookmarks,
           highlights: p.highlights,
+          ink: p.ink,
           strings: p.strings,
           focus: p.focus,
         });

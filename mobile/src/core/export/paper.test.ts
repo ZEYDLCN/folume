@@ -203,7 +203,7 @@ describe('standalone HTML', () => {
     expect(dark).toContain('#17181b');
     expect(dark).toContain('class="l-magazine"');
     expect(dark).toContain('column-count:2');
-    expect(html).toContain('#fbfaf7');
+    expect(html).toContain('#fcf1e5');
     expect(html).toContain('class="l-book"');
     expect(html).not.toContain('column-count');
   });
@@ -516,6 +516,22 @@ describe('exportPaper', () => {
     }
     expect(out[1].summary.images).toBeGreaterThan(3);
     expect(out[3].summary.images).toBe(0);
+  });
+});
+
+describe('tables as a workbook', () => {
+  it('exports every readable table as a sheet and names the file after the paper', async () => {
+    const out = await exportPaper(acmGraph, 'xlsx', { now: NOW }, async () => null);
+    expect(out.filename).toMatch(/-tables\.xlsx$/);
+    expect(out.mime).toBe('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    expect(out.summary.blocks).toBe(2);
+    expect([...unzip(out.bytes).keys()]).toContain('xl/worksheets/sheet2.xml');
+  });
+
+  it('says so when there is no table with readable cells', async () => {
+    const doc = clone(ieeeMl);
+    doc.blocks.filter((b) => b.type === 'table').forEach((b) => (b.table = null));
+    await expect(exportPaper(doc, 'xlsx', {}, async () => null)).rejects.toThrow('no_tables');
   });
 });
 

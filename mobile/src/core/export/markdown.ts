@@ -22,7 +22,7 @@ export function notesToMarkdown(entries: LibraryEntry[], annotations: Annotation
       else lines.push(`- p. ${a.page}`);
       if (a.note.trim()) {
         const text = a.note.trim().split('\n').join('\n  ');
-        lines.push('', a.origin === 'ai' ? `**AI-generated note** (not the authors' text):\n  ${text}` : text);
+        lines.push('', a.origin === 'ai' ? `**AI-generated note** (not the authors' text):\n  ${text}` : a.origin === 'shared' ? `**Note from ${a.author || 'someone else'}:**\n  ${text}` : text);
       }
       lines.push('');
     }

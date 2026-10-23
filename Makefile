@@ -2,7 +2,7 @@
 PY := backend/.venv/bin/python
 .DEFAULT_GOAL := help
 
-.PHONY: help setup-backend setup-mobile test-backend test-mobile lint check schema dev-api e2e corpus
+.PHONY: help setup-backend setup-mobile test-backend test-mobile test-extension lint check schema dev-api e2e corpus
 
 help: ## List targets
 	@grep -E '^[a-zA-Z_-]+:.*?## ' $(MAKEFILE_LIST) | awk 'BEGIN{FS=":.*?## "}{printf "  %-16s %s\n",$$1,$$2}'
@@ -23,11 +23,14 @@ test-backend: ## Run backend tests
 test-mobile: ## Run mobile unit tests
 	cd mobile && npm test --silent
 
+test-extension: ## Test the browser extension's address handling and manifest
+	node --test extension/lib.test.mjs
+
 lint: ## Lint backend (ruff) and typecheck mobile
 	cd backend && .venv/bin/ruff check src tests synth evals
 	cd mobile && npm run --silent typecheck
 
-check: lint test-backend test-mobile ## Everything CI would run
+check: lint test-backend test-mobile test-extension ## Everything CI would run
 
 dev-api: ## Start the API on :8000 with auto reload
 	cd backend && .venv/bin/python -m uvicorn folume.main:app --reload --port 8000

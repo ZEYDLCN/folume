@@ -1,6 +1,6 @@
 // Learning layer in Chromium: real backend, a fake OpenAI-compatible model over HTTP, exported web build.
 import { spawn } from 'node:child_process';
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { assert, check, done, here, launch, shots } from './lib.mjs';
@@ -43,6 +43,7 @@ const llmRequests = async () => (await fetch(`http://127.0.0.1:${LLM}/__requests
 
 const browser = await launch();
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'en-US', acceptDownloads: true });
+await context.grantPermissions(['clipboard-read', 'clipboard-write']).catch(() => {});
 const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
@@ -164,6 +165,16 @@ await check('highlights are painted, persist across a reload and appear in the n
   await shot('05-highlight');
 });
 
+await check('selected text is copied with its citation in the chosen style', async () => {
+  const quote = await selectInParagraph(0, 60);
+  await page.getByTestId('sel-copy-cite').click();
+  await page.waitForFunction(() => /Copied/.test(document.querySelector('[data-testid=selection-bar]')?.textContent ?? ''), null, { timeout: 5000 });
+  const copied = await page.evaluate(() => navigator.clipboard.readText());
+  assert(copied.startsWith(`“${quote.replace(/\s+/g, ' ').trim()}”`), copied);
+  assert(/\(Rossi et al\., n\.d\., p\. \d+\)/.test(copied), `APA in-text citation: ${copied}`);
+  assert(/Rossi, Q\., Larsen, Q\., & Cohen, D\. \(n\.d\.\)\. Sparse Routing for Efficient Transformers\./.test(copied), `APA reference: ${copied}`);
+});
+
 await check('a note is attached to the selected text and saved on the device', async () => {
   await selectInParagraph(2, 60);
   await page.getByTestId('sel-note').click();
@@ -188,6 +199,38 @@ await check('the notes screen lists everything with page and quote, and exports 
   assert(text.includes('Check this against the ablation table.'), 'note text');
   assert(text.includes('**AI-generated note**'), 'AI text is labelled in the export');
   assert(/— p\. \d/.test(text), 'page reference next to the quote');
+});
+
+await check('notes can be shared as a file and merged into a colleague\'s copy, labelled with their name', async () => {
+  const shareButton = page.locator('[data-testid^=share-notes-]').first();
+  const [download] = await Promise.all([page.waitForEvent('download', { timeout: 8000 }), shareButton.click()]);
+  assert(download.suggestedFilename().endsWith('-notes.folume.json'), download.suggestedFilename());
+  const share = JSON.parse(readFileSync(await download.path(), 'utf8'));
+  assert(share.format === 'folume-notes' && share.annotations.length >= 2, `${share.format} ${share.annotations?.length}`);
+  assert(share.annotations.every((a) => !('id' in a)), 'ids stay on this device');
+  assert(!JSON.stringify(share).includes('AI-generated'), 'AI text is not re-shared');
+  // a colleague's file: same paper, another name, another note on the same passage
+  const theirs = { ...share, author: 'Bea', annotations: share.annotations.slice(0, 1).map((a) => ({ ...a, note: 'Bea says: compare with Table I.' })) };
+  const tmp = mkdtempSync(path.join(tmpdir(), 'folume-notes-'));
+  const file = path.join(tmp, 'bea.folume.json');
+  writeFileSync(file, JSON.stringify(theirs));
+  const [chooser] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('import-notes').click()]);
+  await chooser.setFiles(file);
+  await page.getByTestId('notes-import-ok').waitFor({ timeout: 8000 });
+  assert(/Added 1 notes from Bea/.test(await page.getByTestId('notes-import-ok').textContent()), await page.getByTestId('notes-import-ok').textContent());
+  await page.getByText('Bea says: compare with Table I.').waitFor();
+  await page.getByText('from Bea').first().waitFor();
+  // importing the same file again adds nothing
+  const [again] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('import-notes').click()]);
+  await again.setFiles(file);
+  await page.waitForFunction(() => /Added 0 notes from Bea/.test(document.querySelector('[data-testid=notes-import-ok]')?.textContent ?? ''), null, { timeout: 8000 });
+  // a file that is not a notes file is refused
+  const junk = path.join(tmp, 'junk.json');
+  writeFileSync(junk, '{"hello":1}');
+  const [third] = await Promise.all([page.waitForEvent('filechooser'), page.getByTestId('import-notes').click()]);
+  await third.setFiles(junk);
+  await page.getByTestId('notes-import-error').waitFor({ timeout: 8000 });
+  await shot('06b-shared-notes');
 });
 
 await check('an understanding check runs on the device and records the result', async () => {

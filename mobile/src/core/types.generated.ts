@@ -134,6 +134,7 @@ export interface QualityFlag {
     | 'caption_unlinked'
     | 'reference_unparsed'
     | 'no_text_layer'
+    | 'ocr_text'
     | 'low_text_coverage'
     | 'rotated_text_skipped'
     | 'text_recovered';
@@ -259,6 +260,10 @@ export interface DocumentQuality {
   grade: 'good' | 'fair' | 'poor' | 'unsupported';
   issues: QualityIssue[];
   ledger: TextLedger;
+  /**
+   * True when the text was recognised by OCR from page images, not read from a text layer
+   */
+  ocr: boolean;
   omitted: OmittedRegion[];
   pages: PageQuality[];
   score: number;
@@ -268,6 +273,11 @@ export interface DocumentQuality {
  *
  * Counts letters and digits (Unicode NFKC, case kept; hyphens, spaces and punctuation are layout, not content).
  * `complete` is true when nothing is missing and nothing was invented.
+ *
+ * `source` says what the PDF side of the comparison is. For `text_layer` it is the text the PDF itself carries, so
+ * `complete` means the document has every letter of the PDF. For `ocr` there is no such text: the comparison is with
+ * what the OCR engine read from the page images, so `complete` only means nothing the engine read was lost, never that
+ * the text is exact.
  *
  * This interface was referenced by `Document`'s JSON-Schema
  * via the `definition` "Completeness".
@@ -301,6 +311,7 @@ export interface Completeness {
    * Letters the layout analysis could not place; shown in flagged blocks
    */
   recovered: number;
+  source: 'text_layer' | 'ocr';
 }
 /**
  * Where letters were lost or invented: the block (or just the page) and the letters concerned.

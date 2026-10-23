@@ -1,6 +1,7 @@
 import type { Asset, Block, Document, Span } from '../../src/core/types';
 import type { ReaderSettings, ReaderStrings } from '../../src/reader/protocol';
 import { el } from './dom';
+import { linkXrefs } from './inline';
 
 export interface RenderCtx {
   doc: Document;
@@ -8,6 +9,8 @@ export interface RenderCtx {
   strings: ReaderStrings;
   settings: ReaderSettings;
   bookmarks: Set<string>;
+  /** `fig:2` -> block id; references to these in the text become links */
+  xrefs?: Map<string, string>;
 }
 
 const hasWarning = (b: Block) => b.flags.some((f) => f.severity !== 'info');
@@ -217,6 +220,7 @@ export function renderBook(ctx: RenderCtx): HTMLElement {
   for (const b of ctx.doc.blocks) {
     const node = renderBlock(b, ctx);
     if (!node) continue;
+    if (ctx.xrefs?.size && (b.type === 'paragraph' || b.type === 'list_item' || b.type === 'footnote')) linkXrefs(node, ctx.xrefs);
     if (b.type === 'heading' && (b.level ?? 1) <= 1) afterHeading = true;
     else if (afterHeading && b.type === 'paragraph') {
       node.classList.add('lead');

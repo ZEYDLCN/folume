@@ -25,12 +25,15 @@ export type Verdict =
   | { kind: 'complete'; letters: number }
   | { kind: 'recovered'; letters: number; recovered: number }
   | { kind: 'incomplete'; letters: number; missing: number; extra: number }
+  /** read from page pictures by OCR: the letters are the engine's reading, never a proof of what the PDF says */
+  | { kind: 'ocr'; letters: number }
   | { kind: 'unavailable' };
 
 /** The plain answer to "is every letter of the PDF in this document?" for the report and the reader. */
 export function completenessVerdict(doc: Document): Verdict {
   const c = doc.quality.completeness;
   if (!c || doc.quality.grade === 'unsupported') return { kind: 'unavailable' };
+  if (doc.quality.ocr || c.source === 'ocr') return { kind: 'ocr', letters: c.letters_in_pdf };
   if (!c.complete) return { kind: 'incomplete', letters: c.letters_in_pdf, missing: c.missing, extra: c.extra };
   if (c.recovered > 0) return { kind: 'recovered', letters: c.letters_in_pdf, recovered: c.recovered };
   return { kind: 'complete', letters: c.letters_in_pdf };

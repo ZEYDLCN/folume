@@ -205,6 +205,11 @@ class Fetcher:
                     return FetchResult(body2, _filename(url2, disp2))
         raise FetchError("not_a_pdf", "The link did not lead to a PDF. Open the paper's page and copy its “PDF” link.")
 
+    def get_bytes(self, url: str, limit: int) -> tuple[str, str, bytes]:
+        """Any public page (not only a PDF) up to `limit` bytes, through the same checks: (final address, type, body)."""
+        final_url, ctype, body, _ = self._get(url, time.monotonic() + self.timeout, limit)
+        return final_url, ctype, body
+
     # -- internals -------------------------------------------------------------------------------------
     @staticmethod
     def _pdf_from_landing(base: str, body: bytes) -> str | None:
