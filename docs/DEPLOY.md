@@ -5,7 +5,7 @@
 | Parça | Nerede | Ücretsiz sınır |
 |---|---|---|
 | **Sunucu** (PDF → belge, bağlantıdan ekleme, arXiv takibi, isteğe bağlı AI) | Hugging Face Space (Gradio türü) ya da **Render** | Render: 512 MB, 15 dk boş kalınca uyur; HF: uyur, **kalıcı disk yok** |
-| **Uygulama** (web, kurulabilir PWA) | Cloudflare **Pages** | Sınırsız bant genişliği, ayda 500 derleme |
+| **Uygulama** (web, kurulabilir PWA) | **Cloudflare** (Workers statik varlıklar / Pages) | Statik dosyalar için ücretsiz ve sınırsız; ayda 500 derleme |
 
 Sunucu hiçbir şey saklamaz (PDF bellekte dönüştürülür, sonuç indirilince silinir); makaleler, notlar ve kartlar **kullanıcının tarayıcısında** durur. Bu yüzden kalıcı diske ihtiyaç yoktur. Cihazlar arası senkron kapalı kalmalıdır (kayıtlar sunucu yeniden başlayınca silinir); yedek için uygulamadaki **Veri → Yedek** kullanılır.
 
@@ -49,20 +49,22 @@ cloudflared tunnel --url http://localhost:8000 # herkese açık geçici bir http
 
 Bilgisayarın açık olduğu sürece çalışır; adres her başlatışta değişir. Kendin ve birkaç kişi için yeter.
 
-## 2. Uygulama: Cloudflare Pages
+## 2. Uygulama: Cloudflare
+
+Cloudflare'in kurulum sihirbazı artık “Workers” diye açılır (Pages'in yeni hali); depodaki `wrangler.jsonc` yayınlanacak klasörü (`mobile/dist`) ve tek sayfalık uygulama ayarını söyler.
 
 1. <https://dash.cloudflare.com/sign-up> ile hesap aç (kart istemez).
-2. **Workers & Pages → Create → Pages → Connect to Git** → GitHub'ı bağla, `folume` deposunu seç.
+2. **Workers & Pages → Create → Import a repository (Git)** → GitHub'ı bağla, `folume` deposunu seç.
 3. Ayarlar:
-   - **Production branch:** kodun olduğu dal (`main`, birleştirmeden önce `feat/academic-deep-reading`)
-   - **Framework preset:** None
+   - **Project name:** `folume`
    - **Build command:** `cd mobile && npm ci && npx expo export --platform web`
-   - **Build output directory:** `mobile/dist`
-   - **Environment variables:**
+   - **Deploy command:** `npx wrangler deploy` (varsayılan)
+   - **Advanced settings → Production branch:** kodun olduğu dal (`main`, birleştirmeden önce `feat/academic-deep-reading`)
+   - **Advanced settings → Build variables and secrets:**
      - `NODE_VERSION` = `22`
      - `CI` = `1`
-     - `EXPO_PUBLIC_API_URL` = sunucunun adresi (`https://<kullanıcı-adın>-folume-api.hf.space` ya da `https://folume-api-xxxx.onrender.com`; sonunda `/` olmadan)
-4. **Save and Deploy**. Bitince adres `https://<proje-adı>.pages.dev` olur.
+     - `EXPO_PUBLIC_API_URL` = sunucunun adresi (ör. `https://folume-api.onrender.com`; sonunda `/` olmadan)
+4. **Deploy**. Bitince adres `https://folume.<hesap-adın>.workers.dev` olur.
 
 ## 3. İkisini birbirine tanıt (CORS ve anahtar)
 

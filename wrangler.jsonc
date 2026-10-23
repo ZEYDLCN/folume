@@ -1,0 +1,10 @@
+// Cloudflare: the web app is a folder of static files (built by `cd mobile && npm ci && npx expo export --platform web`).
+// `npx wrangler deploy` publishes it; unknown addresses get index.html because the app does its own routing.
+{
+  "name": "folume",
+  "compatibility_date": "2025-10-01",
+  "assets": {
+    "directory": "./mobile/dist",
+    "not_found_handling": "single-page-application"
+  }
+}
