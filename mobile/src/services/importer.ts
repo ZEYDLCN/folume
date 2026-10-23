@@ -12,7 +12,7 @@ export type PdfSource =
   /** a link to the paper: the server fetches it */
   | { kind: 'url'; url: string; name: string };
 
-export type ImportPhase = 'fetching' | 'uploading' | 'converting' | 'downloading' | 'saving' | 'done';
+export type ImportPhase = 'waking' | 'fetching' | 'uploading' | 'converting' | 'downloading' | 'saving' | 'done';
 
 export interface ImportProgress {
   phase: ImportPhase;
@@ -40,6 +40,10 @@ export interface ImportDeps {
   pollIntervalMs?: number;
   /** reads the bytes behind a `uri` source (native cache file); injectable for tests */
   readUri?: (uri: string) => Promise<Uint8Array>;
+  /** how long the server may take to answer before the reader is told it is waking up (default 2.5 s) */
+  wakeNoticeMs?: number;
+  /** how many times to ask a server whose gateway answers 5xx while it starts, 3 s apart (default 30: a minute and a half) */
+  wakeAttempts?: number;
 }
 
 const defaultSleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
@@ -79,6 +83,47 @@ async function mapLimit<T>(items: T[], limit: number, work: (item: T, index: num
   await Promise.all(runners);
 }
 
+/** Not there yet, as opposed to refusing: nothing answered, or a gateway in front of a server still starting did. */
+const MAX_REFUSED = 2;
+const asleep = (e: unknown) => e instanceof ApiError && (e.code === 'network' || e.status >= 500);
+
+/**
+ * Free hosting puts a server to sleep when nobody has used it for a while, and the first request wakes it, which can
+ * take up to a minute. This asks it first, tells the reader what is going on if that takes a moment, and waits for it
+ * before the paper is sent (so a long upload is not thrown away). A server that never answers is left for the upload
+ * itself to report.
+ */
+async function waitForServer(
+  api: FolumeApi,
+  onProgress: (p: ImportProgress) => void,
+  sleep: (ms: number) => Promise<void>,
+  check: () => void,
+  noticeMs: number,
+  attempts: number,
+): Promise<void> {
+  const tell = () => onProgress({ phase: 'waking', fraction: 0.02 });
+  const timer = setTimeout(tell, noticeMs);
+  let refused = 0;
+  try {
+    for (let i = 0; i <= attempts; i++) {
+      check();
+      try {
+        await api.health();
+        return;
+      } catch (e) {
+        if (!asleep(e)) return;
+        // a sleeping server holds the request or answers 5xx from its gateway; nothing answering at all is more likely a
+        // wrong address, so that is only retried briefly and the upload then says so
+        if (e instanceof ApiError && e.code === 'network' && ++refused > MAX_REFUSED) return;
+      }
+      tell();
+      if (i < attempts) await sleep(3000);
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const USER_FACING = new Set([
   'not_a_pdf', 'file_too_large', 'too_many_pages', 'unreadable_pdf', 'busy', 'unauthorized',
   'invalid_url', 'url_not_allowed', 'fetch_failed', 'timeout', 'url_import_disabled', 'page_too_large', 'too_complex',
@@ -104,6 +149,7 @@ export async function importPdf(
   let jobId: string | null = null;
   try {
     const fromLink = source.kind === 'url';
+    await waitForServer(api, onProgress, sleep, check, deps.wakeNoticeMs ?? 2500, deps.wakeAttempts ?? 30);
     onProgress({ phase: fromLink ? 'fetching' : 'uploading', fraction: 0.02 });
     let job = source.kind === 'url' ? await api.uploadUrl(source.url) : await api.upload(buildForm(source));
     jobId = job.id;

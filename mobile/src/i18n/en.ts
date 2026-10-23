@@ -688,4 +688,6 @@ export const en: Record<StringKey, string> = {
   'send.copied': 'Copied.',
   'send.extension': 'There is an extension for Chrome, Edge and Brave: load the project’s “extension” folder with “Load unpacked”. Its toolbar button and right-click menu send the page, a link, or a selected DOI or arXiv id here.',
   'send.deeplink': 'Other apps can send a paper by opening folume://import?url=<link to the paper>.',
+
+  'import.phase.waking': 'The server is waking up… Free hosting sleeps when it has not been used for a while; this can take up to a minute.',
 };

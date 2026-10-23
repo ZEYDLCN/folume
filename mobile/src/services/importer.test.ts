@@ -19,6 +19,82 @@ function setup(serverOpts: Partial<Parameters<typeof createFakeServer>[0]> = {},
 
 const pdf = { kind: 'bytes' as const, bytes: new TextEncoder().encode('%PDF-1.4 test'), name: 'paper.pdf' };
 
+describe('importPdf with a server that has gone to sleep', () => {
+  /** An api whose health check is scripted; everything else goes to the fake server. */
+  function sleepy(health: (n: number) => Promise<Response>) {
+    const base = setup();
+    let n = 0;
+    const fetchFn = ((url: string, init?: RequestInit) => (url.endsWith('/v1/health') ? health(++n) : base.server.fetch(url, init))) as typeof fetch;
+    const api = new FolumeApi({ baseUrl: 'http://srv/', apiKey: null }, fetchFn);
+    const slept: number[] = [];
+    const deps = { ...base.deps, api, wakeNoticeMs: 0, sleep: async (ms: number) => void slept.push(ms) };
+    return { ...base, deps, slept, healthCalls: () => n };
+  }
+  const ok = () => new Response('{"status":"ok","version":"0"}', { status: 200 });
+
+  it('says nothing about waiting when the server answers at once', async () => {
+    const { deps, healthCalls } = sleepy(async () => ok());
+    const phases: string[] = [];
+    await importPdf(pdf, { ...deps, wakeNoticeMs: 60_000 }, (p) => phases.push(p.phase));
+    expect(healthCalls()).toBe(1);
+    expect(phases).not.toContain('waking');
+  });
+
+  it('says the server is waking up when its first answer takes a while, then goes on', async () => {
+    const { deps, server } = sleepy(() => new Promise((r) => setTimeout(() => r(ok()), 30)));
+    const phases: string[] = [];
+    await importPdf(pdf, deps, (p) => phases.push(p.phase));
+    expect(phases[0]).toBe('waking');
+    expect(phases).toContain('uploading');
+    expect(server.calls).toContain('POST /v1/documents');
+  });
+
+  it('keeps asking a server that is not up yet, and sends the paper once it is', async () => {
+    const { deps, slept, server } = sleepy(async (n) => {
+      if (n === 1) throw new TypeError('network');
+      if (n === 2) return new Response('bad gateway', { status: 502 });
+      return ok();
+    });
+    const phases: string[] = [];
+    const entry = await importPdf(pdf, deps, (p) => phases.push(p.phase));
+    expect(entry.id).toBe(ieeeMl.id);
+    expect(phases).toContain('waking');
+    expect(slept.filter((ms) => ms >= 1000)).toHaveLength(2);
+    expect(server.calls.indexOf('POST /v1/documents')).toBeGreaterThan(-1);
+  });
+
+  it('gives up after a while and lets the upload say what is wrong', async () => {
+    const { deps } = setup();
+    let asked = 0;
+    const down = (async () => {
+      asked += 1;
+      throw new TypeError('network');
+    }) as unknown as typeof fetch;
+    const api = new FolumeApi({ baseUrl: 'http://srv/', apiKey: null }, down);
+    await expect(importPdf(pdf, { ...deps, api, wakeAttempts: 3, wakeNoticeMs: 0 }, () => {})).rejects.toMatchObject({ name: 'ImportError', code: 'network' });
+    expect(asked).toBe(4); // an address nothing answers at is tried briefly (three health checks), then the upload says so
+  });
+
+  it('waits longer for a gateway that answers while the server starts than for an address nothing answers at', async () => {
+    const { deps, slept } = sleepy(async (n) => (n < 6 ? new Response('starting', { status: 503 }) : ok()));
+    await importPdf(pdf, deps, () => {});
+    expect(slept.filter((ms) => ms >= 1000)).toHaveLength(5);
+  });
+
+  it('can be cancelled while waiting', async () => {
+    const { deps } = sleepy(async () => new Response('starting', { status: 503 }));
+    const controller = new AbortController();
+    const sleep = async () => controller.abort();
+    await expect(importPdf(pdf, { ...deps, sleep }, () => {}, controller.signal)).rejects.toMatchObject({ code: 'cancelled' });
+  });
+
+  it('an authorisation error is not a sleeping server: it is reported at once', async () => {
+    const { deps, healthCalls } = sleepy(async () => new Response('{"error":{"code":"unauthorized","message":"x"}}', { status: 401 }));
+    await importPdf(pdf, deps, () => {}).catch(() => undefined);
+    expect(healthCalls()).toBe(1);
+  });
+});
+
 describe('importPdf from a link', () => {
   const link = { kind: 'url' as const, url: 'https://arxiv.org/abs/2401.01234', name: 'arxiv.org' };
 
@@ -27,7 +103,7 @@ describe('importPdf from a link', () => {
     const progress: ImportProgress[] = [];
     const entry = await importPdf(link, deps, (p) => progress.push(p));
 
-    expect(server.calls[0]).toBe('POST /v1/documents/from-url');
+    expect(server.calls.filter((c) => c !== 'GET /v1/health')[0]).toBe('POST /v1/documents/from-url');
     expect(server.urlBodies).toEqual([{ url: 'https://arxiv.org/abs/2401.01234' }]);
     expect(entry).toMatchObject({ id: ieeeMl.id, hasOriginalPdf: false });
     expect(await blobs.exists(`docs/${ieeeMl.id}/original.pdf`)).toBe(false);

@@ -38,7 +38,7 @@ Render'ın ücretsiz web servisi: 512 MB bellek, paylaşımlı işlemci, 15 daki
 1. <https://render.com> ile hesap aç (GitHub ile giriş en kolayı), GitHub deposuna erişim ver.
 2. **New → Blueprint** → `folume` deposunu seç → Render `render.yaml`'ı okur → **Apply**. (Blueprint çıkmazsa **New → Web Service → Docker** ile elle: *Dockerfile path* `backend/Dockerfile`, *Docker build context* `backend`, *Instance type* Free, ortam değişkenleri `render.yaml`'daki gibi.)
 3. İlk derleme birkaç dakika sürer. Bitince adres `https://folume-api-xxxx.onrender.com` olur; `/v1/health` adresini aç.
-4. **Environment** sekmesinde `FOLUME_API_KEY`'in değerini oku (Render üretmiştir); 4. adımda uygulamaya yazacaksın. `FOLUME_CORS_ORIGINS`'i 3. adımda dolduracaksın.
+4. **Environment** sekmesinde `FOLUME_API_KEY`'i herkese açık bir demo için **boş bırak**, özel kullanım için uzun bir parola yaz (bkz. “Herkese açık yayın”). `FOLUME_CORS_ORIGINS`'i 3. adımda dolduracaksın.
 
 ### 1-C. Kendi bilgisayarın (tamamen bedava, ama yalnızca açıkken)
 
@@ -73,7 +73,7 @@ Sunucu panelinde (HF: Space → **Settings → Variables and secrets**; Render: 
 | Ad | Tür | Değer |
 |---|---|---|
 | `FOLUME_CORS_ORIGINS` | Variable | `https://<proje-adı>.pages.dev` (uygulamanın adresi) |
-| `FOLUME_API_KEY` | **Secret** | Uzun rastgele bir parola (Render'da zaten üretilmiştir). Tanımlıysa her istek bunu ister; internetteki herkesin senin işlemcini kullanmasını engeller |
+| `FOLUME_API_KEY` | **Secret** | İsteğe bağlı. Uzun rastgele bir parola: tanımlıysa her istek bunu ister, internetteki herkesin senin işlemcini kullanmasını engeller ve her kullanıcı onu uygulamanın Ayarlar'ına bir kez girer. Herkese açık demoda boş bırak |
 
 Değişken ekleyince sunucu kendiliğinden yeniden başlar.
 
@@ -95,6 +95,18 @@ AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak geli
 | `FOLUME_LLM_API_KEY` | Secret |
 
 Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönderilmeden önce her zaman önizlenir; sağlayıcının saklama ve eğitim politikasını kendin değerlendirmelisin.
+
+## Herkese açık yayın (LinkedIn vb.)
+
+**Ziyaretçi hiçbir şey kurmaz:** linke tıklar ve kullanır; hesap ya da anahtar gerekmez. Yukarıdaki adımlar yalnızca senin bir kez yaptığın kurulumdur. Makaleler, notlar, kartlar her ziyaretçinin **kendi tarayıcısında** durur; sunucu hiçbir şey saklamaz ve ziyaretçiler birbirinin verisini göremez.
+
+Herkese açık bir demo için:
+
+1. **API anahtarını kaldır:** Render'da `FOLUME_API_KEY` değişkenini sil (ya da boş bırak). Anahtar varsa her ziyaretçi onu uygulamaya girmek zorunda kalır. Anahtarsız sunucu şu sınırlarla korunur: aynı anda tek dönüşüm, kuyrukta en çok 4 iş, en çok 40 sayfa, 50 MB, bağlantılardan indirme yalnızca herkese açık adreslerden. Biri kötüye kullanırsa anahtarı geri koyman yeter; ücretsiz planda para harcanmaz, sunucu yalnızca yavaşlar.
+2. **Uyanma beklemesini azalt:** Render'ın ücretsiz sunucusu 15 dakika boş kalınca uyur. Uygulama açılır açılmaz sunucuyu uyandırır ve makale eklerken “Sunucu uyanıyor…” diyerek bekler; yine de ilk ziyaretçi bir dakikaya kadar bekleyebilir. Bunu bitirmek için ücretsiz <https://cron-job.org> hesabında `https://<sunucu-adresin>/v1/health` adresini **her 14 dakikada** açan bir iş kur.
+3. **Paylaşım önizlemesi:** LinkedIn gibi sitelerde link, `mobile/public/index.html` içindeki başlık, açıklama ve `og-image.png` ile görünür (görsel adresi `https://folume.2103013235.workers.dev/og-image.png`; farklı bir adres kullanırsan oradaki iki satırı güncelle). LinkedIn önizlemeyi önbelleğe alır; değiştirince <https://www.linkedin.com/post-inspector/> ile yenile.
+4. **Sınırlar, dürüstçe:** ücretsiz sunucu 512 MB bellekli tek örnektir; çok kişi aynı anda büyük makale yüklerse sıra bekler. Ağır kullanım gelirse Render'ın ücretli planına geçmek tek tıktır. OCR kapalıdır.
+5. **Gizlilik cümlesi (paylaşımda kullanabilirsin):** “Makalelerin ve notların yalnızca tarayıcında durur. Sunucu PDF'i bellekte dönüştürür ve saklamaz.” (AI açık değildir; açarsan sağlayıcıya gidenler önizlenir.)
 
 ## Bilmen gerekenler
 
