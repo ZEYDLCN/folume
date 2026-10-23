@@ -90,12 +90,22 @@ AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak geli
 
 | Sağlayıcı | `FOLUME_LLM_BASE_URL` | `FOLUME_LLM_MODEL` | Notlar |
 |---|---|---|---|
-| **Google Gemini** (önerilen başlangıç) | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash-lite` (hızlı, ücretsiz katman limiti yüksek) ya da `gemini-2.5-flash` + `FOLUME_LLM_REASONING_EFFORT=low` | Anahtar: <https://aistudio.google.com/apikey> (kart istemez). Türkçe iyi. Ücretsiz katmanda gönderilenler Google'ın ürünlerini geliştirmekte kullanılabilir (politikasını kontrol et) |
+| **Google Gemini** (önerilen başlangıç) | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-flash-lite-latest` (kararlı takma ad; hızlı, ücretsiz) | Anahtar: <https://aistudio.google.com/apikey> (kart istemez). Türkçe iyi. Ücretsiz katmanda gönderilenler Google'ın ürünlerini geliştirmekte kullanılabilir (politikasını kontrol et). Ücretsiz modeller yoğunlukta 503 verebilir ve eski adlar kapanabilir: aşağıdaki yedek zincirini ekle |
 | **Groq** | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | Anahtar: <https://console.groq.com/keys>. Çok hızlı; günlük istek/token sınırı var |
 | **NVIDIA** | `https://integrate.api.nvidia.com/v1` | `openai/gpt-oss-120b` | Anahtar `nvapi-…` (<https://build.nvidia.com>). Deneme koşulları; düşünen modeldir: `FOLUME_LLM_REASONING_EFFORT=low` ve `FOLUME_LLM_MAX_TOKENS=4000` ekle |
 | **OpenRouter** | `https://openrouter.ai/api/v1` | `:free` ile biten bir model | Ücretsiz modeller sık değişir, dakika/gün sınırları düşük |
 
 Hepsi için `FOLUME_LLM_API_KEY` = sağlayıcının anahtarı (**Secret** olarak gir). **Düşünen modellerde** (gpt-oss, Gemini 2.5 Flash gibi) yanıtın bir kısmı “düşünmeye” gider: yanıt kesilirse `FOLUME_LLM_MAX_TOKENS=4000` ve `FOLUME_LLM_REASONING_EFFORT=low` ekle. Sağlayıcı bu ayarı tanımazsa sunucu isteği ayarsız yineler.
+
+**Yedek modeller.** Ücretsiz katmanlar yük altında 503 verir ya da modeli kapatır. `FOLUME_LLM_FALLBACK_MODELS` virgülle ayrılmış model adlarıdır; ana model hata verirse (503, 404, zaman aşımı) sırayla bunlar denenir. Gemini için denenmiş bir dizilim:
+
+```
+FOLUME_LLM_MODEL=gemini-flash-lite-latest
+FOLUME_LLM_FALLBACK_MODELS=gemini-3.1-flash-lite,gemini-3.5-flash-lite
+FOLUME_LLM_TIMEOUT_SECONDS=25
+```
+
+Zaman aşımı model başınadır; 25 sn, takılan bir modelden diğerine zamanında geçmek için yeter. Hepsi başarısız olursa yine makaleden pasajlar gösterilir.
 
 Sonra uygulamada **Ayarlar → Bağlantıyı dene**: “Sunucuda AI açıklamaları: açık” yazmalı; **Ayarlar → Yapay zekâ ve gizlilik**'i aç. Pasajlar gönderilmeden önce her zaman önizlenir. Sağlayıcı kotayı doldurursa ya da hata verirse uygulama bozulmaz: o istek için makaleden pasajlar gösterilir.
 

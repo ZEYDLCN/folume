@@ -15,6 +15,7 @@ from folume.ai.providers import OpenAICompatibleProvider
 class FakeLLM:
     def __init__(self) -> None:
         self.behavior = "ok"
+        self.fail_models: set[str] = set()  # these models answer 503, as an overloaded free tier does
         self.requests: list[dict] = []
         self.app = FastAPI()
         self.app.post("/chat/completions")(self.completions)
@@ -33,6 +34,8 @@ class FakeLLM:
         user = next(m for m in body["messages"] if m["role"] == "user")["content"]
         text = user if isinstance(user, str) else next(p["text"] for p in user if p["type"] == "text")
         n = len(self.requests)
+        if body.get("model") in self.fail_models:
+            return JSONResponse({"error": "overloaded"}, status_code=503)
         if self.behavior == "error500":
             return JSONResponse({"error": "boom"}, status_code=500)
         if self.behavior == "reject_json_mode" and "response_format" in body:

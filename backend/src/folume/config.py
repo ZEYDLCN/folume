@@ -48,6 +48,7 @@ class Settings:
     llm_base_url: str | None = None
     llm_api_key: str | None = None
     llm_model: str | None = None
+    llm_fallback_models: list[str] = field(default_factory=list)  # tried in order when the model above fails
     llm_vision: bool = False
     llm_timeout_seconds: float = 60.0
     # for models that think before they answer (reasoning models): more room for the answer, and less thinking
@@ -84,6 +85,7 @@ class Settings:
             llm_base_url=e.get("FOLUME_LLM_BASE_URL") or None,
             llm_api_key=e.get("FOLUME_LLM_API_KEY") or None,
             llm_model=e.get("FOLUME_LLM_MODEL") or None,
+            llm_fallback_models=[m.strip() for m in (e.get("FOLUME_LLM_FALLBACK_MODELS") or "").split(",") if m.strip()],
             llm_vision=_bool(e.get("FOLUME_LLM_VISION")),
             llm_timeout_seconds=float(e.get("FOLUME_LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds)),
             llm_max_tokens=max(0, int(e.get("FOLUME_LLM_MAX_TOKENS", defaults.llm_max_tokens))),

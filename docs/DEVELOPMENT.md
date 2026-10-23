@@ -137,6 +137,7 @@ docs/                   ROADMAP · ARCHITECTURE · EVALUATION · DEVELOPMENT
 | `FOLUME_DATA_DIR` | sistem geçici dizini | Geçici iş dizinleri (açılışta temizlenir) |
 | `FOLUME_CORS_ORIGINS` | — | Virgülle ayrılmış izinli kökenler (yalnızca web istemcisi için) |
 | `FOLUME_LLM_BASE_URL` / `FOLUME_LLM_MODEL` / `FOLUME_LLM_API_KEY` | — | OpenAI uyumlu sağlayıcı; yoksa AI uçları yalnızca “kaynak pasajları” yedeğiyle yanıt verir |
+| `FOLUME_LLM_FALLBACK_MODELS` | — | Virgülle ayrılmış model adları: ana model 5xx/404/zaman aşımı verirse sırayla denenir (aynı uç nokta ve anahtar) |
 | `FOLUME_LLM_VISION`, `FOLUME_LLM_TIMEOUT_SECONDS` | 0, 60 | Görsel girdiyi destekliyor mu, istek zaman aşımı |
 | `FOLUME_LLM_MAX_TOKENS` | 0 | Düşünen modeller için: her yanıtta izin verilen en az token (0 = istek ne istiyorsa; yalnızca yükseltir) |
 | `FOLUME_LLM_REASONING_EFFORT` | — | `none` · `minimal` · `low` · `medium` · `high`: düşünen modelin ne kadar düşüneceği; yalnızca verilirse gönderilir, sağlayıcı reddederse ayarsız yinelenir |
