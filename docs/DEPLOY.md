@@ -86,15 +86,18 @@ Değişken ekleyince sunucu kendiliğinden yeniden başlar.
 
 ## 5. İsteğe bağlı: ücretsiz AI
 
-AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak gelir). Açmak için herhangi bir OpenAI uyumlu uç nokta yeter; çoğu sağlayıcının ücretsiz katmanı vardır. Space'e ekle:
+AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak gelir). Açmak için herhangi bir OpenAI uyumlu uç nokta yeter. Aşağıdaki adresler ve model adları değişebilir; sağlayıcının sayfasından doğrula. Ücretsiz limitler kaynaklara göre çelişkili ve sık değişiyor, kendi panelinden bak.
 
-| Ad | Tür |
-|---|---|
-| `FOLUME_LLM_BASE_URL` | Variable (ör. sağlayıcının `…/v1` adresi) |
-| `FOLUME_LLM_MODEL` | Variable |
-| `FOLUME_LLM_API_KEY` | Secret |
+| Sağlayıcı | `FOLUME_LLM_BASE_URL` | `FOLUME_LLM_MODEL` | Notlar |
+|---|---|---|---|
+| **Google Gemini** (önerilen başlangıç) | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-2.5-flash-lite` (hızlı, ücretsiz katman limiti yüksek) ya da `gemini-2.5-flash` + `FOLUME_LLM_REASONING_EFFORT=low` | Anahtar: <https://aistudio.google.com/apikey> (kart istemez). Türkçe iyi. Ücretsiz katmanda gönderilenler Google'ın ürünlerini geliştirmekte kullanılabilir (politikasını kontrol et) |
+| **Groq** | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | Anahtar: <https://console.groq.com/keys>. Çok hızlı; günlük istek/token sınırı var |
+| **NVIDIA** | `https://integrate.api.nvidia.com/v1` | `openai/gpt-oss-120b` | Anahtar `nvapi-…` (<https://build.nvidia.com>). Deneme koşulları; düşünen modeldir: `FOLUME_LLM_REASONING_EFFORT=low` ve `FOLUME_LLM_MAX_TOKENS=4000` ekle |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | `:free` ile biten bir model | Ücretsiz modeller sık değişir, dakika/gün sınırları düşük |
 
-Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönderilmeden önce her zaman önizlenir; sağlayıcının saklama ve eğitim politikasını kendin değerlendirmelisin.
+Hepsi için `FOLUME_LLM_API_KEY` = sağlayıcının anahtarı (**Secret** olarak gir). **Düşünen modellerde** (gpt-oss, Gemini 2.5 Flash gibi) yanıtın bir kısmı “düşünmeye” gider: yanıt kesilirse `FOLUME_LLM_MAX_TOKENS=4000` ve `FOLUME_LLM_REASONING_EFFORT=low` ekle. Sağlayıcı bu ayarı tanımazsa sunucu isteği ayarsız yineler.
+
+Sonra uygulamada **Ayarlar → Bağlantıyı dene**: “Sunucuda AI açıklamaları: açık” yazmalı; **Ayarlar → Yapay zekâ ve gizlilik**'i aç. Pasajlar gönderilmeden önce her zaman önizlenir. Sağlayıcı kotayı doldurursa ya da hata verirse uygulama bozulmaz: o istek için makaleden pasajlar gösterilir.
 
 ## Herkese açık yayın (LinkedIn vb.)
 

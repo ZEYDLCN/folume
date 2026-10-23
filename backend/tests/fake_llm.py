@@ -37,6 +37,8 @@ class FakeLLM:
             return JSONResponse({"error": "boom"}, status_code=500)
         if self.behavior == "reject_json_mode" and "response_format" in body:
             return JSONResponse({"error": "unsupported"}, status_code=400)
+        if self.behavior == "reject_reasoning_effort" and "reasoning_effort" in body:
+            return JSONResponse({"error": "unsupported"}, status_code=400)
         if self.behavior == "always_bad":
             return self._reply("this is not json at all")
         if self.behavior == "bad_once" and n == 1:

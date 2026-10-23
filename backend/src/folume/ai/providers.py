@@ -37,9 +37,13 @@ class OpenAICompatibleProvider:
     timeout: float = 60.0
     client: httpx.AsyncClient | None = None  # injectable for tests
     name: str = "openai-compatible"
+    # models that think before they answer spend part of the token limit on it: this raises the limit (never lowers it)
+    max_tokens_floor: int = 0
+    # "low" makes such models think less; only sent when the operator sets it
+    reasoning_effort: str | None = None
 
     def _payload(self, messages: list[dict], images: list[ImageRef] | None, max_tokens: int,
-                 temperature: float, json_mode: bool) -> dict:
+                 temperature: float, extras: bool) -> dict:
         msgs = [dict(m) for m in messages]
         if images and self.vision:
             last = msgs[-1]
@@ -48,9 +52,12 @@ class OpenAICompatibleProvider:
                 parts.append({"type": "text", "text": f"Image attached for passage {im.passage_id} ({im.role}):"})
                 parts.append({"type": "image_url", "image_url": {"url": f"data:{im.mime};base64,{im.data_b64}"}})
             msgs[-1] = {"role": last["role"], "content": parts}
-        payload: dict = {"model": self.model, "messages": msgs, "max_tokens": max_tokens, "temperature": temperature}
-        if json_mode:
+        payload: dict = {"model": self.model, "messages": msgs, "max_tokens": max(max_tokens, self.max_tokens_floor),
+                         "temperature": temperature}
+        if extras:
             payload["response_format"] = {"type": "json_object"}
+            if self.reasoning_effort:
+                payload["reasoning_effort"] = self.reasoning_effort
         return payload
 
     async def complete(self, messages: list[dict], images: list[ImageRef] | None = None, *,
@@ -61,14 +68,14 @@ class OpenAICompatibleProvider:
         url = f"{self.base_url.rstrip('/')}/chat/completions"
         client = self.client or httpx.AsyncClient(timeout=self.timeout)
         try:
-            for json_mode in (True, False):
+            for extras in (True, False):
                 try:
                     res = await client.post(url, headers=headers, timeout=self.timeout,
-                                            json=self._payload(messages, images, max_tokens, temperature, json_mode))
+                                            json=self._payload(messages, images, max_tokens, temperature, extras))
                 except httpx.HTTPError as exc:
                     raise ProviderError(f"transport: {type(exc).__name__}") from None
-                if res.status_code == 400 and json_mode:
-                    continue  # some servers reject response_format; retry once without it
+                if res.status_code == 400 and extras:
+                    continue  # some servers reject response_format or reasoning_effort; retry once without them
                 if res.status_code >= 400:
                     raise ProviderError(f"upstream status {res.status_code}")
                 try:
@@ -85,5 +92,6 @@ def build_provider(settings: Settings, client: httpx.AsyncClient | None = None) 
     if settings.llm_base_url and settings.llm_model:
         return OpenAICompatibleProvider(
             base_url=settings.llm_base_url, model=settings.llm_model, api_key=settings.llm_api_key,
-            vision=settings.llm_vision, timeout=settings.llm_timeout_seconds, client=client)
+            vision=settings.llm_vision, timeout=settings.llm_timeout_seconds, client=client,
+            max_tokens_floor=settings.llm_max_tokens, reasoning_effort=settings.llm_reasoning_effort)
     return None
