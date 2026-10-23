@@ -38,7 +38,7 @@ Render'ın ücretsiz web servisi: 512 MB bellek, paylaşımlı işlemci, 15 daki
 1. <https://render.com> ile hesap aç (GitHub ile giriş en kolayı), GitHub deposuna erişim ver.
 2. **New → Blueprint** → `folume` deposunu seç → Render `render.yaml`'ı okur → **Apply**. (Blueprint çıkmazsa **New → Web Service → Docker** ile elle: *Dockerfile path* `backend/Dockerfile`, *Docker build context* `backend`, *Instance type* Free, ortam değişkenleri `render.yaml`'daki gibi.)
 3. İlk derleme birkaç dakika sürer. Bitince adres `https://folume-api-xxxx.onrender.com` olur; `/v1/health` adresini aç.
-4. **Environment** sekmesinde `FOLUME_API_KEY`'in değerini oku (Render üretmiştir); 4. adımda uygulamaya yazacaksın. `FOLUME_CORS_ORIGINS`'i 3. adımda dolduracaksın.
+4. **Environment** sekmesinde `FOLUME_API_KEY`'i herkese açık bir demo için **boş bırak**, özel kullanım için uzun bir parola yaz (bkz. “Herkese açık yayın”). `FOLUME_CORS_ORIGINS`'i 3. adımda dolduracaksın.
 
 ### 1-C. Kendi bilgisayarın (tamamen bedava, ama yalnızca açıkken)
 
@@ -73,7 +73,7 @@ Sunucu panelinde (HF: Space → **Settings → Variables and secrets**; Render: 
 | Ad | Tür | Değer |
 |---|---|---|
 | `FOLUME_CORS_ORIGINS` | Variable | `https://<proje-adı>.pages.dev` (uygulamanın adresi) |
-| `FOLUME_API_KEY` | **Secret** | Uzun rastgele bir parola (Render'da zaten üretilmiştir). Tanımlıysa her istek bunu ister; internetteki herkesin senin işlemcini kullanmasını engeller |
+| `FOLUME_API_KEY` | **Secret** | İsteğe bağlı. Uzun rastgele bir parola: tanımlıysa her istek bunu ister, internetteki herkesin senin işlemcini kullanmasını engeller ve her kullanıcı onu uygulamanın Ayarlar'ına bir kez girer. Herkese açık demoda boş bırak |
 
 Değişken ekleyince sunucu kendiliğinden yeniden başlar.
 
@@ -86,15 +86,40 @@ Değişken ekleyince sunucu kendiliğinden yeniden başlar.
 
 ## 5. İsteğe bağlı: ücretsiz AI
 
-AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak gelir). Açmak için herhangi bir OpenAI uyumlu uç nokta yeter; çoğu sağlayıcının ücretsiz katmanı vardır. Space'e ekle:
+AI olmadan her şey çalışır (yanıtlar yalnızca makaleden pasaj olarak gelir). Açmak için herhangi bir OpenAI uyumlu uç nokta yeter. Aşağıdaki adresler ve model adları değişebilir; sağlayıcının sayfasından doğrula. Ücretsiz limitler kaynaklara göre çelişkili ve sık değişiyor, kendi panelinden bak.
 
-| Ad | Tür |
-|---|---|
-| `FOLUME_LLM_BASE_URL` | Variable (ör. sağlayıcının `…/v1` adresi) |
-| `FOLUME_LLM_MODEL` | Variable |
-| `FOLUME_LLM_API_KEY` | Secret |
+| Sağlayıcı | `FOLUME_LLM_BASE_URL` | `FOLUME_LLM_MODEL` | Notlar |
+|---|---|---|---|
+| **Google Gemini** (önerilen başlangıç) | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-flash-lite-latest` (kararlı takma ad; hızlı, ücretsiz) | Anahtar: <https://aistudio.google.com/apikey> (kart istemez). Türkçe iyi. Ücretsiz katmanda gönderilenler Google'ın ürünlerini geliştirmekte kullanılabilir (politikasını kontrol et). Ücretsiz modeller yoğunlukta 503 verebilir ve eski adlar kapanabilir: aşağıdaki yedek zincirini ekle |
+| **Groq** | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` | Anahtar: <https://console.groq.com/keys>. Çok hızlı; günlük istek/token sınırı var |
+| **NVIDIA** | `https://integrate.api.nvidia.com/v1` | `openai/gpt-oss-120b` | Anahtar `nvapi-…` (<https://build.nvidia.com>). Deneme koşulları; düşünen modeldir: `FOLUME_LLM_REASONING_EFFORT=low` ve `FOLUME_LLM_MAX_TOKENS=4000` ekle |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | `:free` ile biten bir model | Ücretsiz modeller sık değişir, dakika/gün sınırları düşük |
 
-Sonra uygulamada **Ayarlar → Yapay zekâ ve gizlilik**'yı aç. Pasajlar gönderilmeden önce her zaman önizlenir; sağlayıcının saklama ve eğitim politikasını kendin değerlendirmelisin.
+Hepsi için `FOLUME_LLM_API_KEY` = sağlayıcının anahtarı (**Secret** olarak gir). **Düşünen modellerde** (gpt-oss, Gemini 2.5 Flash gibi) yanıtın bir kısmı “düşünmeye” gider: yanıt kesilirse `FOLUME_LLM_MAX_TOKENS=4000` ve `FOLUME_LLM_REASONING_EFFORT=low` ekle. Sağlayıcı bu ayarı tanımazsa sunucu isteği ayarsız yineler.
+
+**Yedek modeller.** Ücretsiz katmanlar yük altında 503 verir ya da modeli kapatır. `FOLUME_LLM_FALLBACK_MODELS` virgülle ayrılmış model adlarıdır; ana model hata verirse (503, 404, zaman aşımı) sırayla bunlar denenir. Gemini için denenmiş bir dizilim:
+
+```
+FOLUME_LLM_MODEL=gemini-flash-lite-latest
+FOLUME_LLM_FALLBACK_MODELS=gemini-3.1-flash-lite,gemini-3.5-flash-lite
+FOLUME_LLM_TIMEOUT_SECONDS=25
+```
+
+Zaman aşımı model başınadır; 25 sn, takılan bir modelden diğerine zamanında geçmek için yeter. Hepsi başarısız olursa yine makaleden pasajlar gösterilir.
+
+Sonra uygulamada **Ayarlar → Bağlantıyı dene**: “Sunucuda AI açıklamaları: açık” yazmalı; **Ayarlar → Yapay zekâ ve gizlilik**'i aç. Pasajlar gönderilmeden önce her zaman önizlenir. Sağlayıcı kotayı doldurursa ya da hata verirse uygulama bozulmaz: o istek için makaleden pasajlar gösterilir.
+
+## Herkese açık yayın (LinkedIn vb.)
+
+**Ziyaretçi hiçbir şey kurmaz:** linke tıklar ve kullanır; hesap ya da anahtar gerekmez. Yukarıdaki adımlar yalnızca senin bir kez yaptığın kurulumdur. Makaleler, notlar, kartlar her ziyaretçinin **kendi tarayıcısında** durur; sunucu hiçbir şey saklamaz ve ziyaretçiler birbirinin verisini göremez.
+
+Herkese açık bir demo için:
+
+1. **API anahtarını kaldır:** Render'da `FOLUME_API_KEY` değişkenini sil (ya da boş bırak). Anahtar varsa her ziyaretçi onu uygulamaya girmek zorunda kalır. Anahtarsız sunucu şu sınırlarla korunur: aynı anda tek dönüşüm, kuyrukta en çok 4 iş, en çok 40 sayfa, 50 MB, bağlantılardan indirme yalnızca herkese açık adreslerden. Biri kötüye kullanırsa anahtarı geri koyman yeter; ücretsiz planda para harcanmaz, sunucu yalnızca yavaşlar.
+2. **Uyanma beklemesini azalt:** Render'ın ücretsiz sunucusu 15 dakika boş kalınca uyur. Uygulama açılır açılmaz sunucuyu uyandırır ve makale eklerken “Sunucu uyanıyor…” diyerek bekler; yine de ilk ziyaretçi bir dakikaya kadar bekleyebilir. Bunu bitirmek için ücretsiz <https://cron-job.org> hesabında `https://<sunucu-adresin>/v1/health` adresini **her 14 dakikada** açan bir iş kur.
+3. **Paylaşım önizlemesi:** LinkedIn gibi sitelerde link, `mobile/public/index.html` içindeki başlık, açıklama ve `og-image.png` ile görünür (görsel adresi `https://folume.2103013235.workers.dev/og-image.png`; farklı bir adres kullanırsan oradaki iki satırı güncelle). LinkedIn önizlemeyi önbelleğe alır; değiştirince <https://www.linkedin.com/post-inspector/> ile yenile.
+4. **Sınırlar, dürüstçe:** ücretsiz sunucu 512 MB bellekli tek örnektir; çok kişi aynı anda büyük makale yüklerse sıra bekler. Ağır kullanım gelirse Render'ın ücretli planına geçmek tek tıktır. OCR kapalıdır.
+5. **Gizlilik cümlesi (paylaşımda kullanabilirsin):** “Makalelerin ve notların yalnızca tarayıcında durur. Sunucu PDF'i bellekte dönüştürür ve saklamaz.” (AI açık değildir; açarsan sağlayıcıya gidenler önizlenir.)
 
 ## Bilmen gerekenler
 

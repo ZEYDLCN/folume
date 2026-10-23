@@ -697,6 +697,8 @@ export const tr = {
   'send.copied': 'Kopyalandı.',
   'send.extension': 'Chrome, Edge ve Brave için bir eklenti var: projenin “extension” klasörünü “Paketlenmemiş uzantı yükle” ile ekle. Araç çubuğu düğmesi ve sağ tık menüsü sayfayı, bağlantıyı ya da seçili DOI/arXiv kimliğini buraya gönderir.',
   'send.deeplink': 'Diğer uygulamalar folume://import?url=<makale bağlantısı> adresini açarak makale gönderebilir.',
+
+  'import.phase.waking': 'Sunucu uyanıyor… Ücretsiz barındırma bir süre kullanılmayınca uyur; bir dakikaya kadar sürebilir.',
 } as const;
 
 export type StringKey = keyof typeof tr;

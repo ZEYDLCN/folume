@@ -212,6 +212,7 @@ await check('a wrongly converted block can be reported: a small file with the bl
 await check('tapping a block offers original + bookmark; bookmarks survive a reload', async () => {
   await frame().locator('#book .blk-paragraph .bt').first().click();
   await page.getByTestId('block-actions').waitFor();
+  await page.waitForTimeout(400); // the sheet has just appeared and is still settling: a press during that moment is lost
   await page.getByTestId('action-bookmark').click();
   await page.waitForTimeout(300);
   await page.reload();

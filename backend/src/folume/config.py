@@ -14,6 +14,11 @@ def _bool(v: str | None, default: bool = False) -> bool:
     return v.strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _effort(v: str | None) -> str | None:
+    value = (v or "").strip().lower()
+    return value if value in {"none", "minimal", "low", "medium", "high"} else None
+
+
 @dataclass
 class Settings:
     api_key: str | None = None  # when set, every /v1 request must send X-API-Key
@@ -43,8 +48,12 @@ class Settings:
     llm_base_url: str | None = None
     llm_api_key: str | None = None
     llm_model: str | None = None
+    llm_fallback_models: list[str] = field(default_factory=list)  # tried in order when the model above fails
     llm_vision: bool = False
     llm_timeout_seconds: float = 60.0
+    # for models that think before they answer (reasoning models): more room for the answer, and less thinking
+    llm_max_tokens: int = 0  # 0 = what each request asks for; otherwise the larger of the two
+    llm_reasoning_effort: str | None = None  # none | minimal | low | medium | high
     ai_rate_limit_per_minute: int = 40
     # optional multi-device sync
     sync_enabled: bool = False
@@ -76,8 +85,11 @@ class Settings:
             llm_base_url=e.get("FOLUME_LLM_BASE_URL") or None,
             llm_api_key=e.get("FOLUME_LLM_API_KEY") or None,
             llm_model=e.get("FOLUME_LLM_MODEL") or None,
+            llm_fallback_models=[m.strip() for m in (e.get("FOLUME_LLM_FALLBACK_MODELS") or "").split(",") if m.strip()],
             llm_vision=_bool(e.get("FOLUME_LLM_VISION")),
             llm_timeout_seconds=float(e.get("FOLUME_LLM_TIMEOUT_SECONDS", defaults.llm_timeout_seconds)),
+            llm_max_tokens=max(0, int(e.get("FOLUME_LLM_MAX_TOKENS", defaults.llm_max_tokens))),
+            llm_reasoning_effort=_effort(e.get("FOLUME_LLM_REASONING_EFFORT")),
             ai_rate_limit_per_minute=int(e.get("FOLUME_AI_RATE_LIMIT", defaults.ai_rate_limit_per_minute)),
             sync_enabled=_bool(e.get("FOLUME_SYNC_ENABLED")),
             sync_db=Path(e.get("FOLUME_SYNC_DB", str(defaults.sync_db))),

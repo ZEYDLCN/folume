@@ -111,6 +111,115 @@ def test_response_format_rejection_is_retried_without_it(client, llm):
     assert "response_format" in llm.requests[0]["body"] and "response_format" not in llm.requests[1]["body"]
 
 
+def test_a_model_that_thinks_first_gets_room_to_think_and_is_asked_to_think_little(tmp_path, llm):
+    # reasoning models spend part of the token limit before they answer: the operator can raise it and lower the effort
+    provider = llm.provider()
+    provider.max_tokens_floor = 4000
+    provider.reasoning_effort = "low"
+    with make_client(tmp_path, provider) as c:
+        assert c.post("/v1/ai/explain", json=explain_body()).json()["mode"] == "llm"
+        assert llm.requests[0]["body"]["max_tokens"] == 4000
+        assert llm.requests[0]["body"]["reasoning_effort"] == "low"
+        c.post("/v1/ai/quiz", json={"section_title": "x", "passages": PASSAGES, "count": 3, "language": "en",
+                                    "level": "intermediate", "paper": {"title": "x"}})
+        assert llm.requests[-1]["body"]["max_tokens"] == 4000  # a floor, so the larger quiz limit (1800) is raised too
+
+
+def test_the_token_limit_is_only_ever_raised_never_lowered(tmp_path, llm):
+    provider = llm.provider()
+    provider.max_tokens_floor = 500
+    with make_client(tmp_path, provider) as c:
+        c.post("/v1/ai/explain", json=explain_body())
+        assert llm.requests[0]["body"]["max_tokens"] == 1200
+    assert "reasoning_effort" not in llm.requests[0]["body"]  # not sent unless the operator asks for it
+
+
+def test_a_server_that_rejects_the_extra_settings_is_asked_again_without_them(tmp_path, llm):
+    llm.behavior = "reject_reasoning_effort"
+    provider = llm.provider()
+    provider.reasoning_effort = "low"
+    with make_client(tmp_path, provider) as c:
+        assert c.post("/v1/ai/explain", json=explain_body()).json()["mode"] == "llm"
+    first, second = (r["body"] for r in llm.requests[:2])
+    assert "reasoning_effort" in first and "reasoning_effort" not in second and "response_format" not in second
+
+
+def test_the_settings_come_from_the_environment():
+    s = Settings.from_env({"FOLUME_LLM_MAX_TOKENS": "4000", "FOLUME_LLM_REASONING_EFFORT": "Low"})
+    assert s.llm_max_tokens == 4000 and s.llm_reasoning_effort == "low"
+    assert Settings.from_env({}).llm_max_tokens == 0 and Settings.from_env({}).llm_reasoning_effort is None
+    assert Settings.from_env({"FOLUME_LLM_REASONING_EFFORT": "bogus"}).llm_reasoning_effort is None
+    from folume.ai.providers import build_provider
+    p = build_provider(Settings(llm_base_url="http://x/v1", llm_model="m", llm_max_tokens=3000, llm_reasoning_effort="low"))
+    assert p.max_tokens_floor == 3000 and p.reasoning_effort == "low"
+
+
+def test_an_overloaded_model_is_replaced_by_the_next_one_in_the_chain(tmp_path, llm):
+    # free tiers answer 503 or hang now and then: the operator lists models to try in turn
+    llm.fail_models = {"fake-model"}
+    provider = llm.provider()
+    provider.fallback_models = ("backup-a", "backup-b")
+    with make_client(tmp_path, provider) as c:
+        data = c.post("/v1/ai/explain", json=explain_body()).json()
+    assert data["mode"] == "llm" and data["notices"] == []
+    assert [r["body"]["model"] for r in llm.requests] == ["fake-model", "backup-a"]
+
+
+def test_the_chain_is_left_alone_while_the_first_model_works(tmp_path, llm):
+    provider = llm.provider()
+    provider.fallback_models = ("backup-a",)
+    with make_client(tmp_path, provider) as c:
+        assert c.post("/v1/ai/explain", json=explain_body()).json()["mode"] == "llm"
+    assert [r["body"]["model"] for r in llm.requests] == ["fake-model"]
+
+
+def test_when_every_model_in_the_chain_fails_the_reader_still_gets_the_passages(tmp_path, llm):
+    llm.fail_models = {"fake-model", "backup-a", "backup-b"}
+    provider = llm.provider()
+    provider.fallback_models = ("backup-a", "backup-b")
+    with make_client(tmp_path, provider) as c:
+        data = c.post("/v1/ai/explain", json=explain_body()).json()
+    assert data["mode"] == "extractive" and "ai_unavailable" in data["notices"]
+    assert [r["body"]["model"] for r in llm.requests] == ["fake-model", "backup-a", "backup-b"]
+
+
+def test_a_model_that_does_not_answer_at_all_is_replaced_too():
+    import asyncio
+
+    import httpx
+
+    from folume.ai.providers import OpenAICompatibleProvider
+
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        import json
+
+        model = json.loads(request.content)["model"]
+        seen.append(model)
+        if model == "first":
+            raise httpx.ConnectTimeout("no answer")
+        if model == "gone":
+            return httpx.Response(404, json={"error": "model not found"})
+        return httpx.Response(200, json={"choices": [{"message": {"content": "{}"}}]})
+
+    client = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+    provider = OpenAICompatibleProvider(base_url="http://x/v1", model="first", client=client,
+                                        fallback_models=("gone", "third"))
+    assert asyncio.run(provider.complete([{"role": "user", "content": "hi"}])) == "{}"
+    assert seen == ["first", "gone", "third"]
+
+
+def test_the_chain_comes_from_the_environment():
+    from folume.ai.providers import build_provider
+
+    s = Settings.from_env({"FOLUME_LLM_FALLBACK_MODELS": "a, b ,, c "})
+    assert s.llm_fallback_models == ["a", "b", "c"]
+    assert Settings.from_env({}).llm_fallback_models == []
+    p = build_provider(Settings(llm_base_url="http://x/v1", llm_model="m", llm_fallback_models=["a", "m", "a", "b"]))
+    assert p.fallback_models == ("a", "b")  # the first model is not tried twice, nor is any other
+
+
 def test_without_a_model_the_reader_gets_the_source_passages_only(offline):
     data = offline.post("/v1/ai/explain", json=explain_body()).json()
     assert data["mode"] == "extractive" and data["notices"] == ["ai_disabled"]

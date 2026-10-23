@@ -682,13 +682,21 @@ function onBookClick(e: MouseEvent): void {
 }
 
 let selectionTimer: number | undefined;
+/** whether the app was told about a selection that is still there: "no selection" is only news after one */
+let selectionShown = false;
 
 function onSelectionChange(): void {
   window.clearTimeout(selectionTimer);
   selectionTimer = window.setTimeout(() => {
+    // a tap puts the caret somewhere, which collapses the selection: that must not close what the tap just opened
+    const clear = () => {
+      if (!selectionShown) return;
+      selectionShown = false;
+      post({ type: 'selection-clear' });
+    };
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0 || state.mode !== 'book') {
-      post({ type: 'selection-clear' });
+      clear();
       return;
     }
     const range = sel.getRangeAt(0);
@@ -696,17 +704,18 @@ function onSelectionChange(): void {
     const blk = startEl?.closest<HTMLElement>('[data-b]');
     const root = blk ? textRoot(blk) : null;
     if (!blk || !root) {
-      post({ type: 'selection-clear' });
+      clear();
       return;
     }
     const total = root.textContent?.length ?? 0;
     const start = root.contains(range.startContainer) ? offsetWithin(root, range.startContainer, range.startOffset) : 0;
     const end = root.contains(range.endContainer) ? offsetWithin(root, range.endContainer, range.endOffset) : total;
     if (end <= start) {
-      post({ type: 'selection-clear' });
+      clear();
       return;
     }
     const text = (root.textContent ?? '').slice(start, end);
+    selectionShown = true;
     post({ type: 'selection', blockId: blk.id, start, end, text, rect: rectOf(range) });
   }, 220);
 }

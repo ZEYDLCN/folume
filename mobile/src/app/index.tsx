@@ -11,7 +11,8 @@ import { LinkSheet } from '@/features/library/LinkSheet';
 import { TagsSheet } from '@/features/library/TagsSheet';
 import { ImportOverlay } from '@/features/library/ImportOverlay';
 import type { LibraryEntry } from '@/data/library';
-import { getKnowledge, getStores } from '@/services/container';
+import { getApi, getKnowledge, getStores } from '@/services/container';
+import { wakeServer } from '@/services/wake';
 import { sameWanted } from '@/data/userdata';
 import { pickPdf } from '@/services/picker';
 import type { PdfSource } from '@/services/importer';
@@ -47,6 +48,11 @@ export default function LibraryScreen() {
     setLinkOpen(true);
     router.setParams({ import: undefined, url: undefined, text: undefined, title: undefined });
   }, [requested, router]);
+
+  // a sleeping free server takes up to a minute to wake: start it now, not when the first paper is added
+  useEffect(() => {
+    void wakeServer(getApi());
+  }, []);
 
   const refresh = useCallback(async () => {
     const stores = getStores();

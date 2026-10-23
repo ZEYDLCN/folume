@@ -22,6 +22,7 @@ services:
       # the address of the web app, e.g. https://folume.pages.dev (set it in the dashboard after the app is deployed)
       - key: FOLUME_CORS_ORIGINS
         sync: false
-      # Render invents a long random key; read it in the dashboard and type it into the app's Settings once
+      # Leave this empty for a public demo (anyone with the link can use the server). Put a long random password here to make
+      # the server private: every request must then send it, and each person enters it once in the app's Settings.
       - key: FOLUME_API_KEY
-        generateValue: true
+        sync: false

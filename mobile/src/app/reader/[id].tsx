@@ -113,13 +113,14 @@ export default function ReaderScreen() {
     (async () => {
       const [d, s] = await Promise.all([library.loadDocument(id), library.getState(id)]);
       if (cancelled) return;
+      // the paper and its reading state arrive together: a tap on a block (a bookmark, say) must never meet a missing state
       setRaw(d);
-      setFixes(await getStores().fixes.list(id));
-      setInkPages((await getStores().ink.list(id)).map((p) => ({ page: p.page, strokes: p.strokes })));
       setState(s);
       setMode(first(params.mode) ? requestedMode : s.mode);
       setPercent(s.percent);
       if (d) void library.markOpened(id);
+      setFixes(await getStores().fixes.list(id));
+      setInkPages((await getStores().ink.list(id)).map((p) => ({ page: p.page, strokes: p.strokes })));
       setAnnotations(await annRepo.list(id));
     })();
     return () => {
